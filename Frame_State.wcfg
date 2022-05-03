@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="Y:/Documents/Twist/FPGA_Code/CLIO_Interface/Frame_State_tb_isim_beh.wdb" id="1" type="auto">
+         <top_modules>
+            <top_module name="Frame_State_tb" />
+            <top_module name="glbl" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <WVObjectSize size="17" />
+   <wvobject fp_name="/Frame_State_tb/read_byte_count" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">read_byte_count[15:0]</obj_property>
+      <obj_property name="ObjectShortName">read_byte_count[15:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/write_word_count" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">write_word_count[14:0]</obj_property>
+      <obj_property name="ObjectShortName">write_word_count[14:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/frame_rd_en" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">frame_rd_en</obj_property>
+      <obj_property name="ObjectShortName">frame_rd_en</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/DAC_EN" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">DAC_EN</obj_property>
+      <obj_property name="ObjectShortName">DAC_EN</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/FRAME" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">FRAME</obj_property>
+      <obj_property name="ObjectShortName">FRAME</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/CCLK" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">CCLK</obj_property>
+      <obj_property name="ObjectShortName">CCLK</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/rst" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">rst</obj_property>
+      <obj_property name="ObjectShortName">rst</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/ti_clk" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">ti_clk</obj_property>
+      <obj_property name="ObjectShortName">ti_clk</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/reg_length" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">reg_length[31:0]</obj_property>
+      <obj_property name="ObjectShortName">reg_length[31:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/reg_delay" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">reg_delay[31:0]</obj_property>
+      <obj_property name="ObjectShortName">reg_delay[31:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/uut/frame_state" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">frame_state[1:0]</obj_property>
+      <obj_property name="ObjectShortName">frame_state[1:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/clk_loop" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">clk_loop[20:0]</obj_property>
+      <obj_property name="ObjectShortName">clk_loop[20:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/uut/Bytes_to_Send" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">Bytes_to_Send[15:0]</obj_property>
+      <obj_property name="ObjectShortName">Bytes_to_Send[15:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/uut/frame_fifo/inst/DOUT" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">DOUT[7:0]</obj_property>
+      <obj_property name="ObjectShortName">DOUT[7:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/uut/frame_fifo/inst/RD_DATA_COUNT" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">RD_DATA_COUNT[15:0]</obj_property>
+      <obj_property name="ObjectShortName">RD_DATA_COUNT[15:0]</obj_property>
+      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/uut/wr_en" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">wr_en</obj_property>
+      <obj_property name="ObjectShortName">wr_en</obj_property>
+   </wvobject>
+   <wvobject fp_name="/Frame_State_tb/din" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">din[15:0]</obj_property>
+      <obj_property name="ObjectShortName">din[15:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+</wave_config>
