@@ -1,6 +1,6 @@
 - 👋 Hi, I’m @Paul-Twist
 - 👀 I’m interested in DNA synthesis
-- 🌱 I’m currently learning Verilog 
+- 🌱 I’m currently writing Verilog 
 - 💞️ I’m looking to collaborate on loading CLIO chips
 - 📫 How to reach me email at pheilman@twistbioscience.com
 
