@@ -256,6 +256,8 @@ ODDR2 ODDR2_inst(
 // Problem was they did not document the need for >8 MCLK long CCLK signal  
 ODDR2 ODDR2_CLIO(
   .D0(1), .D1(0), .C0(ti_clk), .C1(~ti_clk), .Q(MCLK) );
+// Could provide signal based flipping of clocks by putting the signal into
+// the D0 and D1 ports. 
  
 ODDR2 ODDR2_debug1(
   .D0(1), .D1(0), .C0(ti_clk), .C1(~ti_clk), .Q(debug[1]) );
@@ -358,48 +360,55 @@ dpram8K_a16_b16 adjust_ram(.clk(ti_clk),             // Common clock S
                                                     
                                                 
 
-   reg  [31:0] reg_length   = 6;    // 2250 bytes in a column, 18,000 bits 0x8ca
-   reg  [31:0] reg_delay    = 3;    // # of columns in pattern, 10,000 switch columns + 1 DAC column
-   wire [15:0] read_byte_count;
+   reg  [31:0] reg_length   = 2250;    // 2250 bytes in a column, 18,000 bits 0x8ca
+   reg  [31:0] reg_delay    = 10001;    // # of columns in pattern, 10,000 switch columns + 1 DAC column
+   wire [15:0] read_byte_count, read_count;
    wire [15:0] write_word_count; 
    wire [7:0] dout;   
    wire frame_rd_en;      
    wire dac_ready;
-   
+/* FIFO moved into Frame State machine to handle byte swizzling
+// FIFO created by Core Generator, doesn't work when asked to do 16 to 8 conversion   
 // Frame FIFO to load the switches in the CLIO switch matrix
 // Also does the 16 bit to 8 bit conversion
 // Needs two clock inputs to do width conversion.
 
-fifo32k_a16_b8 frame_fifo(
+fifo_16w_32768deep frame_fifo(
   .rst(rst),                        // input rst
-  .wr_clk(ti_clk),                  // input wr_clk
-  .rd_clk(ti_clk),                  // input rd_clk
+  .clk(ti_clk),                     // input wr_clk
+  //.rd_clk(ti_clk),                // input rd_clk
   .din(adjust_w_data),              // input [15 : 0] din
   .wr_en(adjust_write),             // input wr_en
   .rd_en(frame_rd_en),              // input rd_en
-  .dout(dout),                      // output [7 : 0] dout
+  .dout(dout),                      // output [15 : 0] dout
   .full(),                          // output full
   .empty(),                         // output empty
-  .rd_data_count(read_byte_count),  // output [15 : 0] rd_data_count
-  .wr_data_count(write_word_count)  // output [14 : 0] wr_data_count, useless, need to look at read side
+  .data_count(read_count)          // output [15 : 0] rd_data_count
+//  .data_count(write_word_count)     // output [14 : 0] wr_data_count, useless, need to look at read side
 );
    
+assign read_byte_count = read_count << 1; 
+assign write_word_count = read_count;
+
+*/
 Frame_State frame_state(
    .rst(rst),
    .ti_clk(ti_clk),
-  // .din(adjust_w_data),
-  // .wr_en(adjust_write),
-  // .dout(dout),
+   .din(adjust_w_data),
+   .wr_en(adjust_write),
+   .dout(dout),
    .reg_length(reg_length),
    .reg_delay(reg_delay),
    .read_byte_count(read_byte_count),
    .frame_rd_en(frame_rd_en),
    .dac_ready(dac_ready),
    .FRAME(FRAME),
+   .frame_state(fr_state),
    .CCLK(CCLK)
    );
-
-assign debug[9:2] = {dac_ready, asic_data[3:0], CCLK, FRAME};       
+   
+wire [2:0] fr_state;
+assign debug[9:2] = {asic_data[4:0], CCLK, FRAME};       
 
 reg [31:0] tx_counter = 32'h0000_0000; // Counter of bytes sent to CLIO
 reg cclk_reg; 
@@ -685,7 +694,7 @@ begin
 		case (reg_w_addr[7:1])
 		7'b0_0000_01: reg_dev_control  			<= {reg_w_data, reg_low_store};   
 		// 0x10-0x1C 
-		7'b0_0001_00: reg_length   <= {reg_w_data, reg_low_store} ; // # of words in a column
+		7'b0_0001_00: reg_length   <= {reg_w_data, reg_low_store} ; // # of bytes in a column
 	 	7'b0_0001_01: reg_delay    <= {reg_w_data, reg_low_store};  // # of columns in a frame
 	   7'b0_0001_10: reg_divider  <= {reg_w_data, reg_low_store};  // Encoder and clock divider
 	 //  7'b0_0001_11: reg_tx_count <= {reg_w_data, reg_low_store};  // Keep track of # of bytes sent 
@@ -721,8 +730,8 @@ begin
 		7'b0_0000_10: reg_data <= reg_fpga_version;
 		7'b0_0000_11: reg_data <= reg_adc_setpoint;        //ADC desired value, 1024 = 25C, 930 = 30C
 		// 0x10-0x1C 
-		7'b0_0001_00: reg_data <= reg_length; 					// Length of pattern # of columns in pattern
-		7'b0_0001_01: reg_data <= reg_delay;               // Individual encoder ticks from start
+		7'b0_0001_00: reg_data <= reg_length; 					// # of bytes in a column
+		7'b0_0001_01: reg_data <= reg_delay;               // # of columns in a frame
 	   7'b0_0001_10: reg_data <= reg_divider;             // Encoder and clock divider
 	   7'b0_0001_11: reg_data <= tx_counter;            // Keep track of # of bytes sent 
 		// 0x20-0x2C
