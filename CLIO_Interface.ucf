@@ -77,17 +77,27 @@ NET "K_A_INPUT"     LOC="D19"   | IOSTANDARD="HSTL_II" | PULLUP;
 ## NET "asic_clk"      LOC="M20"  | IOSTANDARD="LVCMOS33" | OUT_TERM = UNTUNED_50;
 ## NET "asic_latch"    LOC="N20"  | IOSTANDARD="LVCMOS33";
 
-
-
 ## NET "drv_half"      LOC="A21"  | IOSTANDARD="LVCMOS33";
 ## NET "drv_qtr"       LOC="B21"  | IOSTANDARD="LVCMOS33";
 
 ##NET "strobe"        LOC="R20"   | IOSTANDARD="LVCMOS18";
 
+NET "VSSN_EN"          LOC = "D9"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
+NET "VSS22N_EN"        LOC = "C8"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
+NET "VDD_EN"           LOC = "D10"  | IOSTANDARD="LVCMOS18" | PULLDOWN;
+NET "VDD15_EN"         LOC = "D11"  | IOSTANDARD="LVCMOS18" | PULLDOWN;
+NET "VDD22_EN"         LOC = "D15"  | IOSTANDARD="LVCMOS18" | PULLDOWN;
+NET "VDD18_EN_N"       LOC = "A18"  | IOSTANDARD="LVCMOS18" | PULLUP;
+NET "VTT_EN"           LOC = "A6"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
+
 NET "spare_2"      LOC="R22"   | IOSTANDARD="HSTL_II" | PULLDOWN;
-NET "DAC_EN_IN"      LOC="K19"   | IOSTANDARD="HSTL_II" | PULLDOWN; 
+NET "DAC_EN_IN<2>"      LOC="K19"   | IOSTANDARD="HSTL_II" | PULLDOWN;  // Enable in pin on CLIO IF 2 boards
+NET "DAC_EN_IN<3>"     LOC="A17"    | IOSTANDARD="HSTL_II" | PULLDOWN;  // Enable pin for CLIO IF 3 boards
 NET "pd<1>"            LOC="R20"   | IOSTANDARD="HSTL_II" ; // Adjacent pins to use as pulldowns
 NET "pd<2>"            LOC="N20"   | IOSTANDARD="HSTL_II" ;  
+
+NET "version<0>"     LOC="B10"  | IOSTANDARD="LVCMOS18" | PULLUP;      // Used to determine version 11 for CLIO 2
+NET "version<1>"     LOC="A8"   | IOSTANDARD="LVCMOS18" | PULLUP;      //                   version 01 for CLIO 3, pulled low by solder     
 
 NET "pso"           LOC="G19"   | IOSTANDARD="LVCMOS18";
 
