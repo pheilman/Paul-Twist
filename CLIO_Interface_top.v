@@ -55,8 +55,9 @@ module CLIO_Interface_top(
     
 	output wire        strobe,
 	output wire        spare_2,
-   input  wire        DAC_EN_IN,    // Square wave from NI DAQ, forwarded to CLIO
+   input  wire [3:2]  DAC_EN_IN,    // Square wave from NI DAQ, forwarded to CLIO, different pin on different vintages
    input  wire [2:1]  pd,           // Adjacent pins, also pulldown 
+   input  wire [1:0]  version,      // Pins near ground, = 11 for CLIO 2, 01 for CLIO 3
    output wire        waste2,
 	output wire        i2c_sda,
 	output wire        i2c_scl,
@@ -87,6 +88,13 @@ module CLIO_Interface_top(
    output wire        SPI_MOSI,              // Actual SPI output wire to chip
    output wire        SPI_SCLK,              // Actual SPI clock wire
    output wire        SPI_CS,                // CS to CLIO, active low
+   output wire        VSSN_EN,               // Turns on -1.0V supply 
+   output wire        VSS22N_EN,             // Turns on -2.2V supply for DACs on CLIO
+   output wire        VDD_EN,                // Turns on  1.0V supply for logic on CLIO (First)
+   output wire        VDD15_EN,              // Turns on  1.5V supply for HSTL interface on CLIO
+   output wire        VDD22_EN,              // Turns on  2.2V supply for DACs on CLIO
+   output wire        VDD18_EN_N,            // Turns on  1.8V supply for HSTL interface on CLIO, active low, into PMOS
+   output wire        VTT_EN,                // Turns on  0.75 supply for termination voltage for HSTL interface
 	output wire        adc_cs,
 	output wire        adc_chsel,
 	output wire        adc_clk,
@@ -131,7 +139,8 @@ reg  [9:0]  sreg_r_addr, sreg_w_addr;
 
 reg  [15:0] sreg_low_store;
 
-wire        cpu_dac_enable;
+wire        cpu_dac_enable, cpu_prbs_select, cpu_clock_invert;
+wire        frame_int;
 
 wire [31:0] reg_dev_status;
 reg  [31:0] reg_dev_control;
@@ -255,12 +264,12 @@ ODDR2 ODDR2_inst(
 // Flipped clock phase back, didn't help to get centered in data
 // Problem was they did not document the need for >8 MCLK long CCLK signal  
 ODDR2 ODDR2_CLIO(
-  .D0(1), .D1(0), .C0(ti_clk), .C1(~ti_clk), .Q(MCLK) );
+  .D0(~cpu_clock_invert), .D1(cpu_clock_invert), .C0(ti_clk), .C1(~ti_clk), .Q(MCLK) );
 // Could provide signal based flipping of clocks by putting the signal into
 // the D0 and D1 ports. 
  
 ODDR2 ODDR2_debug1(
-  .D0(1), .D1(0), .C0(ti_clk), .C1(~ti_clk), .Q(debug[1]) );
+  .D0(~cpu_clock_invert), .D1(cpu_clock_invert), .C0(ti_clk), .C1(~ti_clk), .Q(debug[1]) );
 
 wire   sreg_heat_en = sreg_dev_control[0];
 
@@ -285,6 +294,7 @@ ADC_SPI adc_interface(
       .adc_dout(adc_dout)
       );
       
+wire cpu_power_shutdown;
 
 assign drv_half = 1'b1;
 assign drv_qtr  = 1'b1;
@@ -294,9 +304,13 @@ assign drv_qtr  = 1'b1;
 	 
 assign i2c_sda = 1'bz;			// These are floated to not interfere 
 assign i2c_scl = 1'bz;			// with existing Opal Kelly I2C interface.
+
 assign hi_muxsel = 1'b0;
          
-assign cpu_dac_enable = WireIn10[0];  // Controlled by cpu to toggle dacs and make pulse waveforms
+assign cpu_dac_enable = WireIn10[0];   // Controlled by cpu to toggle dacs and make pulse waveforms
+assign cpu_prbs_select = WireIn10[1];  // Controlled to select PRBS for BER testing
+assign cpu_clock_invert = WireIn10[2]; // Controlled to invert MCLK going to CLIO
+assign cpu_power_shutdown = WireIn10[3];  // Turns off all power supplies to the CLIO
 
 assign reg_reset     = TrigIn44[0];
 assign pattern_reset = TrigIn45[0];
@@ -402,7 +416,7 @@ Frame_State frame_state(
    .read_byte_count(read_byte_count),
    .frame_rd_en(frame_rd_en),
    .dac_ready(dac_ready),
-   .FRAME(FRAME),
+   .FRAME(frame_int),
    .frame_state(fr_state),
    .CCLK(CCLK)
    );
@@ -435,48 +449,48 @@ begin
    end
 end
 
-assign asic_data = dout; //WireIn12[7:0] ; // col[7:0]; // col //8'hFF; //clk_div[33:26]; //{8{clk_div[26]}};     // Toggle all switches
+assign asic_data = (cpu_prbs_select)? col     : dout; //WireIn12[7:0] ; // col[7:0]; // col    // Toggle all switches
+assign FRAME     = (cpu_prbs_select)? frame_r : frame_int; 
+
 
 assign CLIO_RSTN = rstn;
 
 // assign DAC_EN = cpu_dac_enable && dac_ready;
-assign DAC_EN = DAC_EN_IN;       // Signal from NI DAQ forwarded to CLIO chip.
+// DAC_EN_IN input moves between CLIO2 to CLIO3, select the correct one based on version pins
+assign DAC_EN = (version[1])? DAC_EN_IN[2] : DAC_EN_IN[3] ;       // Signal from NI DAQ forwarded to CLIO chip.
 
-// State machine to load frame buffer
-// Reset, Idle, Loading, Column_Clock, DAC_Enable
 
- /*  
-   // Select from the 16 bit wirein(12) toggling.
-   reg [15:0] col;
-   wire      fb;
-   always@(posedge ti_clk)
-   begin
-	if(Frame_r)
-		begin
-			col<=WireIn12;
-		end
-	else
-		begin
-			col<={col[7:0],col[15:8]};   // Swap byte to send out to CLIO to send a 16 bit value
-		end
-   end
-*/
 // P(x) = x^8+x^6+x^5+x^4+1
-
-//assign fb=col[7]^col[5]^col[4]^col[3];
+   
+// For now, turning on all power supplies.   
+assign VSSN_EN    = (cpu_power_shutdown)? 0 : 1;
+assign VSS22N_EN  = (cpu_power_shutdown)? 0 : 1;
+assign VDD_EN     = (cpu_power_shutdown)? 0 : 1;
+assign VDD15_EN   = (cpu_power_shutdown)? 0 : 1;
+assign VDD22_EN   = (cpu_power_shutdown)? 0 : 1;
+assign VDD18_EN_N = (cpu_power_shutdown)? 1 : 0;
+assign VTT_EN     = (cpu_power_shutdown)? 0 : 1;     
    
 reg [34:0] clk_div = 0;
-/*
-assign CCLK = 1'b0;
-//assign MCLK = ti_clk; //clk_div[0];   
- */
+reg [7:0]  col;
+reg      frame_r;
+wire     fb;
+
+assign fb=col[7]^col[5]^col[4]^col[3];
+
 always @(posedge ti_clk)
 begin
-      clk_div <= clk_div + 1;
-//      if (clk_div[25:0] == 0)
-//         Frame_r <= 1'b1;
-//      else
-//         Frame_r <= 1'b0;
+   clk_div <= clk_div + 1;
+   if (clk_div[25:0] == 0)
+      begin
+         frame_r <= 1'b1;
+         col     <= 1;
+      end
+   else
+      begin
+         frame_r <= 1'b0;
+         col     <= {col[6:0], fb};     // Shift in the new feedback value to make prbs pattern
+      end
 end
                                               
                                                   
@@ -507,10 +521,10 @@ dpram2K_a16_b256 nozzle_ram(.clk(ti_clk),             // Common clock
                           .addrb(nozzle_addr),           // Generated near main pulse 
                           .dob(noz_rddata)); 
 
-// Opal Kelly board LED    D9      D8             D7   D6              D5               D4               D3           D2 (blinky)
-assign   led         = { ~DAC_EN,   1'b0, 1'b0,~SPI_SCLK ,   ~SPI_MISO      , ~SPI_CS          , ~SPI_MOSI,   clk_div[24]} ;
+// Opal Kelly board LED    D9          D8         D7         D6            D5               D4               D3           D2 (blinky)
+assign   led         = { ~DAC_EN,  ~version[1], ~version[0],~SPI_SCLK ,   ~SPI_MISO      , ~SPI_CS          , ~SPI_MOSI,   clk_div[24]} ;
 
-assign waste2 = pd[1] && pd[2];               // Adjacent pins to DAC_EN_IN, may be connected with solder
+assign waste2 = pd[1] && pd[2] && version[1] && version[0];   // Adjacent pins to DAC_EN_IN, may be connected with solder
 
 // SPI Interface, FIFO fills from Nozzle write and is read back by Nozzle read
 // First Word Fall Through is needed on the write to SPI side.
@@ -804,7 +818,7 @@ okWireOut 	 ep28 (.ok1(ok1), .ok2(ok2x[17*17 +: 17 ]), .ep_addr(8'h28), .ep_data
 okWireOut 	 ep29 (.ok1(ok1), .ok2(ok2x[18*17 +: 17 ]), .ep_addr(8'h29), .ep_datain(dac_act4[31:16]));
 okWireOut 	 ep2A (.ok1(ok1), .ok2(ok2x[19*17 +: 17 ]), .ep_addr(8'h2A), .ep_datain(spi_write_count));
 okWireOut    ep2B (.ok1(ok1), .ok2(ok2x[21*17 +: 17 ]), .ep_addr(8'h2B), .ep_datain(spi_read_count)); 
-okWireOut    ep2C (.ok1(ok1), .ok2(ok2x[22*17 +: 17 ]), .ep_addr(8'h2C), .ep_datain(~K_A_INPUT)); 
+okWireOut    ep2C (.ok1(ok1), .ok2(ok2x[22*17 +: 17 ]), .ep_addr(8'h2C), .ep_datain(DAC_EN)); 
 
 okTriggerIn  ep40 (.ok1(ok1),                           .ep_addr(8'h40), .ep_clk(ti_clk), .ep_trigger(TrigIn40));
 okTriggerIn  ep41 (.ok1(ok1),                           .ep_addr(8'h41), .ep_clk(ti_clk), .ep_trigger(TrigIn41));
