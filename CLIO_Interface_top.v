@@ -311,6 +311,7 @@ assign cpu_dac_enable = WireIn10[0];   // Controlled by cpu to toggle dacs and m
 assign cpu_prbs_select = WireIn10[1];  // Controlled to select PRBS for BER testing
 assign cpu_clock_invert = WireIn10[2]; // Controlled to invert MCLK going to CLIO
 assign cpu_power_shutdown = WireIn10[3];  // Turns off all power supplies to the CLIO
+assign clear_transfer_counter = WireIn10[4]; // Clears the SPI transaction counter
 
 assign reg_reset     = TrigIn44[0];
 assign pattern_reset = TrigIn45[0];
@@ -484,7 +485,7 @@ begin
    if (clk_div[25:0] == 0)
       begin
          frame_r <= 1'b1;
-         col     <= 1;
+         col     <= 8'h55;             // Create a pattern with 0s and 1s. Will be reported back.
       end
    else
       begin
@@ -545,6 +546,8 @@ assign i_SPI_MISO = SPI_MISO;
 reg read_fifo, r_TX_Ready, rr_TX_Ready;
 reg [6:0] clk_counter;   
 reg [2:0] word_counter = 0;
+reg [15:0] transfer_counter = 0;
+wire clear_transfer_counter;
 
 assign spare_2 = o_SPI_CLK;
 assign SPI_SCLK = o_SPI_CLK;
@@ -585,6 +588,8 @@ begin
    r_TX_Ready <= w_TX_Ready;
  //  rr_TX_Ready <= r_TX_Ready;
    read_fifo <= i_TX_DV;
+   if (clear_transfer_counter)
+      transfer_counter <= 0;
    if (~read_fifo)
       clk_counter <= clk_counter + 1;              // Single clock stretch needed to complete last SCLK edge
    if (i_TX_DV && rr_TX_Ready)
@@ -594,6 +599,7 @@ begin
    if ((word_counter == 3) && i_TX_DV)
    begin
       word_counter <= 0;
+      transfer_counter <= transfer_counter +1;
       rr_TX_Ready <= 1;
    end
       else
@@ -814,7 +820,7 @@ okWireOut 	 ep24 (.ok1(ok1), .ok2(ok2x[13*17 +: 17 ]), .ep_addr(8'h24), .ep_data
 okWireOut 	 ep25 (.ok1(ok1), .ok2(ok2x[14*17 +: 17 ]), .ep_addr(8'h25), .ep_datain(tx_counter[31:16]));
 okWireOut 	 ep26 (.ok1(ok1), .ok2(ok2x[15*17 +: 17 ]), .ep_addr(8'h26), .ep_datain(cclk_counter));
 okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(dac_act3[31:16]));
-okWireOut 	 ep28 (.ok1(ok1), .ok2(ok2x[17*17 +: 17 ]), .ep_addr(8'h28), .ep_datain(dac_act4[15:0]));
+okWireOut 	 ep28 (.ok1(ok1), .ok2(ok2x[17*17 +: 17 ]), .ep_addr(8'h28), .ep_datain(transfer_counter));
 okWireOut 	 ep29 (.ok1(ok1), .ok2(ok2x[18*17 +: 17 ]), .ep_addr(8'h29), .ep_datain(dac_act4[31:16]));
 okWireOut 	 ep2A (.ok1(ok1), .ok2(ok2x[19*17 +: 17 ]), .ep_addr(8'h2A), .ep_datain(spi_write_count));
 okWireOut    ep2B (.ok1(ok1), .ok2(ok2x[21*17 +: 17 ]), .ep_addr(8'h2B), .ep_datain(spi_read_count)); 
