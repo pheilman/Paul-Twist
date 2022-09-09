@@ -295,6 +295,7 @@ ADC_SPI adc_interface(
       );
       
 wire cpu_power_shutdown;
+wire dac_only;
 
 assign drv_half = 1'b1;
 assign drv_qtr  = 1'b1;
@@ -307,12 +308,12 @@ assign i2c_scl = 1'bz;			// with existing Opal Kelly I2C interface.
 
 assign hi_muxsel = 1'b0;
          
-assign cpu_dac_enable = WireIn10[0];   // Controlled by cpu to toggle dacs and make pulse waveforms
-assign cpu_prbs_select = WireIn10[1];  // Controlled to select PRBS for BER testing
-assign cpu_clock_invert = WireIn10[2]; // Controlled to invert MCLK going to CLIO
-assign cpu_power_shutdown = WireIn10[3];  // Turns off all power supplies to the CLIO
-assign clear_transfer_counter = WireIn10[4]; // Clears the SPI transaction counter
-
+assign cpu_dac_enable         = WireIn10[0];  // Controlled by cpu to toggle dacs and make pulse waveforms
+assign cpu_prbs_select        = WireIn10[1];  // Controlled to select PRBS for BER testing
+assign cpu_clock_invert       = WireIn10[2];  // Controlled to invert MCLK going to CLIO
+assign cpu_power_shutdown     = WireIn10[3];  // Turns off all power supplies to the CLIO
+assign clear_transfer_counter = WireIn10[4];  // Clears the SPI transaction counter
+assign dac_only               = WireIn10[5];  // Only send 1 column to frame buffer, the DAC values 
 assign reg_reset     = TrigIn44[0];
 assign pattern_reset = TrigIn45[0];
 assign sreg_reset    = TrigIn46[0];
@@ -376,7 +377,7 @@ dpram8K_a16_b16 adjust_ram(.clk(ti_clk),             // Common clock S
                                                 
 
    reg  [31:0] reg_length   = 2250;    // 2250 bytes in a column, 18,000 bits 0x8ca
-   reg  [31:0] reg_delay    = 10001;    // # of columns in pattern, 10,000 switch columns + 1 DAC column
+   reg  [31:0] reg_delay    = 10001;   // Number of columns in frame buffer, 10,000 switch + 1 DAC 
    wire [15:0] read_byte_count, read_count;
    wire [15:0] write_word_count; 
    wire [7:0] dout;   
@@ -406,6 +407,18 @@ assign read_byte_count = read_count << 1;
 assign write_word_count = read_count;
 
 */
+// New request, load only the first column of the frame buffer, the DAC values, by
+// creating a new FRAME pulse
+// Dominique request to try ramping up the DAC values.
+
+always@(posedge ti_clk)
+begin
+   if (dac_only)
+      reg_delay <= 1;     // Just send the 1 DAC column
+   else
+      reg_delay <= 10001; // # of columns in frame buffer, 10,000 switch columns + 1 DAC column
+end
+
 Frame_State frame_state(
    .rst(rst),
    .ti_clk(ti_clk),
@@ -715,7 +728,7 @@ begin
 		7'b0_0000_01: reg_dev_control  			<= {reg_w_data, reg_low_store};   
 		// 0x10-0x1C 
 		7'b0_0001_00: reg_length   <= {reg_w_data, reg_low_store} ; // # of bytes in a column
-	 	7'b0_0001_01: reg_delay    <= {reg_w_data, reg_low_store};  // # of columns in a frame
+	// 	7'b0_0001_01: reg_delay    <= {reg_w_data, reg_low_store};  // # of columns in a frame Contolled by bit in control word
 	   7'b0_0001_10: reg_divider  <= {reg_w_data, reg_low_store};  // Encoder and clock divider
 	 //  7'b0_0001_11: reg_tx_count <= {reg_w_data, reg_low_store};  // Keep track of # of bytes sent 
 		// 0x20-0x2C
