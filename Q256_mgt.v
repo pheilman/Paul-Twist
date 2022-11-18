@@ -118,10 +118,10 @@ module Q256_mgt(
 	output        shdn_120v,
 	input         pzt_err_n,
 	input         pzt_clim_n,	     
-	output        amp_en,
-	output        ok_led,
-	output        jet_led,
-	output        spare_led
+	output        amp_en
+//	output        ok_led
+//	output        jet_led
+//	output        power_led
 	);
    
 	parameter     sr_length = 32;                            // 32 long shift registers in Q heads, 64 long in D heads.
@@ -320,11 +320,11 @@ module Q256_mgt(
 	assign 	dac         = dac_ramp[22:7];  // Dac output from waveform generator.
 	// Opal Kelly board LED    D9      D8             D7:6        D5               D4               D3           D2 (blinky)
   // assign   LED         = { !heat_on,!sreg_heat_en, i[1:0] ,   1'b1       , 1'b0             , start_column,   clk_div[24]} ;
-	assign 	ok_led      = !( pzt_err_n && pzt_clim_n);  // Power is on and OK
-   assign   jet_led     = !( print_active && clk_div[23]);
+//	assign 	ok_led      = !( pzt_err_n && pzt_clim_n);  // Power is on and OK
+ //  assign   jet_led     = !( print_active && clk_div[23]);
 	assign   valve_on    = valve;
    assign   heat_en     = heat;
-   assign   spare_led   = ext_encoder;                  // Idle jetting when we are using clock and ext_encoder is low
+//   assign   power_led   = ext_encoder;                  // Idle jetting when we are using clock and ext_encoder is low
 		
    assign   ASIC_POLARITY  = 1'b1;
    assign   ASIC_BLANKING  = !jet_all;      

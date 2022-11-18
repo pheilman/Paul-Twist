@@ -68,9 +68,10 @@ module CLIO_Interface_top(
    input  wire        pso,                   // PSO pulse, x stage movement, drives everything
 	output wire        waste,
 	output wire        valve_on,              // Turns on purge valve, pushes ink through head to prime
+   output wire        float_flow,            // Disconnects voltage setting to flow cell lid
 	output wire        ok_led,
-	output wire        jet_led,
-	output wire        spare_led,
+	output wire        fc_top_led,
+	output wire        power_led,
    output wire        heat_on,
    output wire        amp_en,                // When high, opens relay to enable amp
 	output wire        asic_clk,
@@ -242,9 +243,9 @@ always @ (posedge ti_clk)
 		.ASIC_POLARITY(asic_polarity),
       .ASIC_BLANKING(asic_blanking),
 		.WASTE(waste),		
-		.ok_led(ok_led),
-		.jet_led(jet_led),
-		.spare_led(spare_led),
+	//	.ok_led(ok_led),
+	//	.jet_led(jet_led),
+	//	.power_led(power_led),
 		.valve_on(valve_on),
       .heat_en(heat_en),
       .sreg_heat_en(sreg_heat_en),
@@ -436,7 +437,7 @@ Frame_State frame_state(
    );
    
 wire [2:0] fr_state;
-assign debug[9:2] = {asic_data[4:0], CCLK, FRAME};       
+//assign debug[9:2] = {asic_data[4:0], CCLK, FRAME};       
 
 reg [31:0] tx_counter = 32'h0000_0000; // Counter of bytes sent to CLIO
 reg cclk_reg; 
@@ -474,7 +475,7 @@ assign CLIO_RSTN = rstn;
 assign DAC_EN = (version[1])? DAC_EN_IN[2] : DAC_EN_IN[3] ;       // Signal from NI DAQ forwarded to CLIO chip.
 
 
-// P(x) = x^8+x^6+x^5+x^4+1
+// P(x) = x^8+x^6+x^5+x^4+1 
    
 // For now, turning on all power supplies.   
 assign VSSN_EN    = (cpu_power_shutdown)? 0 : 1;
@@ -483,7 +484,22 @@ assign VDD_EN     = (cpu_power_shutdown)? 0 : 1;
 assign VDD15_EN   = (cpu_power_shutdown)? 0 : 1;
 assign VDD22_EN   = (cpu_power_shutdown)? 0 : 1;
 assign VDD18_EN_N = (cpu_power_shutdown)? 1 : 0;
-assign VTT_EN     = (cpu_power_shutdown)? 0 : 1;     
+assign VTT_EN     = (cpu_power_shutdown)? 0 : 1; 
+assign power_led  = (cpu_power_shutdown)? 1 : 0;
+
+assign float_flow = 1'b1;             // Turn off switch to flow cell top, let it float
+assign fc_top_led = 1'b0;              // Turn LED on 
+assign ok_led     = o_SPI_MOSI;       // indicates SPI activity
+
+// Turning off SPI outputs when power is turned off. Could solve the latchup problem.
+assign SPI_SCLK   = (cpu_power_shutdown)? 0 : o_SPI_CLK;
+//assign spare[1] = o_SPI_MOSI;
+assign SPI_MOSI   = (cpu_power_shutdown)? 0 : o_SPI_MOSI;                                    
+assign SPI_CS     = (cpu_power_shutdown)? 0 : rr_TX_Ready; //o_SPI_CS_n;      
+
+assign strobe = o_SPI_MOSI; 
+assign spare_2 = o_SPI_CLK;
+assign i_SPI_MISO = SPI_MISO;  
    
 reg [34:0] clk_div = 0;
 reg [7:0]  col;
@@ -555,22 +571,13 @@ wire w_master_ready, w_TX_Ready;
 wire o_RX_DV, o_SPI_MOSI, i_SPI_MISO, i_TX_DV, o_SPI_CLK;
 wire  o_SPI_CS_n;
 wire [15:0] o_RX_Word;
-assign i_SPI_MISO = SPI_MISO;
 reg read_fifo, r_TX_Ready, rr_TX_Ready;
 reg [6:0] clk_counter;   
 reg [2:0] word_counter = 0;
 reg [15:0] transfer_counter = 0;
 wire clear_transfer_counter;
 
-assign spare_2 = o_SPI_CLK;
-assign SPI_SCLK = o_SPI_CLK;
-//assign spare[1] = o_SPI_MOSI;
-assign SPI_MOSI = o_SPI_MOSI;
-
-                                    
-assign strobe = o_SPI_MOSI; 
-
-assign SPI_CS   = rr_TX_Ready; //o_SPI_CS_n;                // Need to shift later to include final clock edge
+            // Need to shift later to include final clock edge
                               
 fifo_16w_32768deep SPI_write_fifo(
   .clk(ti_clk),               // input clk
@@ -581,7 +588,7 @@ fifo_16w_32768deep SPI_write_fifo(
   .dout(w_fifo_out),          // output [15 : 0] dout
   .full(),                    // output full
   .empty(w_fifo_empty),       // output empty
-  .data_count(spi_write_count)               // output [10 : 0] data_count
+  .data_count(spi_write_count) // output [15 : 0] data_count
 );          
 
 fifo_16w_32768deep_no_fwft SPI_read_fifo(
@@ -593,7 +600,7 @@ fifo_16w_32768deep_no_fwft SPI_read_fifo(
   .dout(nozzle_r_data),       // output [15 : 0] dout
   .full(),                    // output full
   .empty(),                   // output empty
-  .data_count(spi_read_count)     // output [10 : 0] data_count
+  .data_count(spi_read_count) // output [15 : 0] data_count
 );                           
 
 always @(posedge ti_clk)
@@ -618,13 +625,15 @@ begin
       else
       rr_TX_Ready <= r_TX_Ready;
 end
-assign i_TX_DV = (clk_counter[6:0]==0) && !w_fifo_empty;
+assign i_TX_DV = (clk_counter[6:0]==0) && !w_fifo_empty;  // Need a pulse to start the SPI interface
 
 // debug outputs are numbered 9-1, ti_clk is on pin 0. Shows up as D0 on scope. So shift them up by 1, debug[2] is D1 on scope
-//assign debug[9:2] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,read_fifo};   
+assign debug[9:2] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,read_fifo};   
 
   // Instantiate Master
-  SPI_Master_Reference SPI_Master_Inst (
+  SPI_Master_Reference    #( .CLKS_PER_HALF_BIT(2))  // Ti_CLK (48 MHz) is divided by 4, thus 1.28us/word  
+  SPI_Master_Inst 
+   (
    // Control/Data Signals,
    .i_Rst_L(rstn),               // FPGA Reset
    .i_Clk(ti_clk),               // FPGA Clock

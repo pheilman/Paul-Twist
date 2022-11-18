@@ -63,9 +63,11 @@ NET "DAC_EN"        LOC="A14"   | IOSTANDARD="LVCMOS18" | DRIVE = 2 ;
 #### Net added to bring in signal from K & A Synthesizer
 NET "K_A_INPUT"     LOC="D19"   | IOSTANDARD="HSTL_II" | PULLUP;
 
-## NET "spare_led"     LOC="C6"  | IOSTANDARD="LVCMOS33";
-## NET "jet_led"       LOC="A3"  | IOSTANDARD="LVCMOS33";
-## NET "ok_led"        LOC="A8"  | IOSTANDARD="LVCMOS33";
+NET "power_led"     LOC="A15"   | IOSTANDARD="LVCMOS18";
+NET "fc_top_led"    LOC="C15"   | IOSTANDARD="LVCMOS18";
+NET "ok_led"        LOC="C13"   | IOSTANDARD="LVCMOS18";
+
+NET "float_flow"    LOC="C5"    | IOSTANDARD="LVCMOS18";
 
 ## NET "pzt_clim_n"    LOC="A5"   | IOSTANDARD="LVCMOS33" | PULLUP;
 ## NET "shdn_5v"       LOC="D14"  | IOSTANDARD="LVCMOS33";
