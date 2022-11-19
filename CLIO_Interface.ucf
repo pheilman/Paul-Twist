@@ -93,8 +93,8 @@ NET "VDD18_EN_N"       LOC = "A18"  | IOSTANDARD="LVCMOS18" | PULLUP;
 NET "VTT_EN"           LOC = "A6"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
 
 NET "spare_2"      LOC="R22"   | IOSTANDARD="HSTL_II" | PULLDOWN;
-NET "DAC_EN_IN<2>"      LOC="K19"   | IOSTANDARD="HSTL_II" | PULLDOWN;  // Enable in pin on CLIO IF 2 boards
-NET "DAC_EN_IN<3>"     LOC="A17"    | IOSTANDARD="HSTL_II" | PULLDOWN;  // Enable pin for CLIO IF 3 boards
+NET "DAC_EN_IN<2>"      LOC="K19"   | IOSTANDARD="HSTL_II";  // Enable in pin on CLIO IF 2 boards
+NET "DAC_EN_IN<3>"     LOC="A17"    | IOSTANDARD="HSTL_II";  // Enable pin for CLIO IF 3 boards
 NET "pd<1>"            LOC="R20"   | IOSTANDARD="HSTL_II" ; // Adjacent pins to use as pulldowns
 NET "pd<2>"            LOC="N20"   | IOSTANDARD="HSTL_II" ;  
 
