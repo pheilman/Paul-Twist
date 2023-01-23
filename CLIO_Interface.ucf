@@ -48,6 +48,33 @@ NET "asic_data<5>"  LOC="L22"  | IOSTANDARD="HSTL_II" ;
 NET "asic_data<6>"  LOC="K21"  | IOSTANDARD="HSTL_II" ;
 NET "asic_data<7>"  LOC="L20"  | IOSTANDARD="HSTL_II" ;
 
+NET "logic_anal<0>"  LOC="G19"  | IOSTANDARD="LVCMOS15" ; 
+NET "logic_anal<1>"  LOC="F20"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<2>"  LOC="H20"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<3>"  LOC="J19"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<4>"  LOC="D19"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<5>"  LOC="D20"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<6>"  LOC="F18"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<7>"  LOC="F19"  | IOSTANDARD="LVCMOS15" ;
+
+NET "logic_anal<8>"   LOC="M16"  | IOSTANDARD="LVCMOS15" ; 
+NET "logic_anal<9>"   LOC="L15"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<10>"  LOC="K20"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<11>"  LOC="K19"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<12>"  LOC="U20"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<13>"  LOC="R20"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<14>"  LOC="R22"  | IOSTANDARD="LVCMOS15" ;
+NET "logic_anal<15>"  LOC="N20"  | IOSTANDARD="LVCMOS15" ;
+
+NET "logic_clk<0>"   LOC="M20"   | IOSTANDARD="LVCMOS15";
+NET "logic_clk<1>"   LOC="L19"   | IOSTANDARD="LVCMOS15";
+
+NET "ADC_CS_N"       LOC="G16"   | IOSTANDARD="LVCMOS15";
+NET "ADC_CLK"        LOC="H19"   | IOSTANDARD="LVCMOS15";
+NET "ADC_SDO"        LOC="H18"   | IOSTANDARD="LVCMOS15";
+NET "ADC_SDI"        LOC="F16"   | IOSTANDARD="LVCMOS15";
+NET "ADC_RST_N"      LOC="J17"   | IOSTANDARD="LVCMOS15";
+
 NET "MCLK"          LOC="G20"  | IOSTANDARD="HSTL_II" ;
 NET "CCLK"          LOC="H22"   | IOSTANDARD="HSTL_II" ;
 NET "FRAME"         LOC="E20"   | IOSTANDARD="HSTL_II" ;
@@ -60,8 +87,7 @@ NET "SPI_CS"        LOC="C9"    | IOSTANDARD="LVCMOS18" | DRIVE = 2 ;
 NET "CLIO_RSTN"     LOC="B14"   | IOSTANDARD="LVCMOS18" | DRIVE = 2 ;
 NET "DAC_EN"        LOC="A14"   | IOSTANDARD="LVCMOS18" | DRIVE = 2 ;
 
-#### Net added to bring in signal from K & A Synthesizer
-NET "K_A_INPUT"     LOC="D19"   | IOSTANDARD="HSTL_II" | PULLUP;
+#### Net added to bring in signal from K & A Synthesize
 
 NET "power_led"     LOC="A15"   | IOSTANDARD="LVCMOS18";
 NET "fc_top_led"    LOC="C15"   | IOSTANDARD="LVCMOS18";
@@ -92,16 +118,21 @@ NET "VDD22_EN"         LOC = "D15"  | IOSTANDARD="LVCMOS18" | PULLDOWN;
 NET "VDD18_EN_N"       LOC = "A18"  | IOSTANDARD="LVCMOS18" | PULLUP;
 NET "VTT_EN"           LOC = "A6"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
 
-NET "spare_2"      LOC="R22"   | IOSTANDARD="HSTL_II" | PULLDOWN;
-NET "DAC_EN_IN<2>"      LOC="K19"   | IOSTANDARD="HSTL_II";  // Enable in pin on CLIO IF 2 boards
-NET "DAC_EN_IN<3>"     LOC="A17"    | IOSTANDARD="HSTL_II";  // Enable pin for CLIO IF 3 boards
-NET "pd<1>"            LOC="R20"   | IOSTANDARD="HSTL_II" ; // Adjacent pins to use as pulldowns
-NET "pd<2>"            LOC="N20"   | IOSTANDARD="HSTL_II" ;  
+NET "spare_<1>"        LOC="V21"    | IOSTANDARD="HSTL_II" ;
+NET "spare_<2>"        LOC="V22"    | IOSTANDARD="HSTL_II" ;
+ 
+NET "DAC_CLK"          LOC="C10"    | IOSTANDARD="LVCMOS18" ;
+NET "DAC_SYNC_N"       LOC="C12"    | IOSTANDARD="LVCMOS18" ;
+NET "DAC_DATA"         LOC="B6"     | IOSTANDARD="LVCMOS18" ;
+
+
+//NET "DAC_EN_IN<2>"      LOC="K19"   | IOSTANDARD="HSTL_II";  // Enable in pin on CLIO IF 2 boards
+NET "DAC_EN_IN"     LOC="A17"    | IOSTANDARD="HSTL_II";  // Enable pin for CLIO IF 3+ boards
+//NET "pd<1>"            LOC="R20"   | IOSTANDARD="HSTL_II" ; // Adjacent pins to use as pulldowns
+//NET "pd<2>"            LOC="N20"   | IOSTANDARD="HSTL_II" ;  
 
 NET "version<0>"     LOC="B10"  | IOSTANDARD="LVCMOS18" | PULLUP;      // Used to determine version 11 for CLIO 2
 NET "version<1>"     LOC="A8"   | IOSTANDARD="LVCMOS18" | PULLUP;      //                   version 01 for CLIO 3, pulled low by solder     
-
-NET "pso"           LOC="G19"   | IOSTANDARD="LVCMOS18";
 
 ############################################################################
 ## FrontPanel Host Interface pins                                                       
@@ -177,19 +208,19 @@ NET "led[6]"     LOC="AA10"   | IOSTANDARD=LVCMOS33;
 NET "led[7]"     LOC="AB10"   | IOSTANDARD=LVCMOS33;
 
 
-INST "dac<0>" TNM = DAC_out;
-INST "dac<1>" TNM = DAC_out;
-INST "dac<2>" TNM = DAC_out;
-INST "dac<3>" TNM = DAC_out;
-INST "dac<4>" TNM = DAC_out;
-INST "dac<5>" TNM = DAC_out;
-INST "dac<6>" TNM = DAC_out;
-INST "dac<7>" TNM = DAC_out;
-INST "dac<8>" TNM = DAC_out;
-INST "dac<9>" TNM = DAC_out;
-INST "dac<10>" TNM = DAC_out;
-INST "dac<11>" TNM = DAC_out;
-INST "dac<12>" TNM = DAC_out;
-INST "dac<13>" TNM = DAC_out;
-TIMEGRP "DAC_out" OFFSET = OUT 10 ns AFTER "hi_in<0>" REFERENCE_PIN "dac<6>";
+# INST "dac<0>" TNM = DAC_out;
+# INST "dac<1>" TNM = DAC_out;
+# INST "dac<2>" TNM = DAC_out;
+# INST "dac<3>" TNM = DAC_out;
+# INST "dac<4>" TNM = DAC_out;
+# INST "dac<5>" TNM = DAC_out;
+# INST "dac<6>" TNM = DAC_out;
+# INST "dac<7>" TNM = DAC_out;
+# INST "dac<8>" TNM = DAC_out;
+# INST "dac<9>" TNM = DAC_out;
+# INST "dac<10>" TNM = DAC_out;
+# INST "dac<11>" TNM = DAC_out;
+# INST "dac<12>" TNM = DAC_out;
+# INST "dac<13>" TNM = DAC_out;
+# TIMEGRP "DAC_out" OFFSET = OUT 10 ns AFTER "hi_in<0>" REFERENCE_PIN "dac<6>";
 

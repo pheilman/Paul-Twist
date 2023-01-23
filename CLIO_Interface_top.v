@@ -3,32 +3,10 @@
 //
 // Verilog source for the control of a CLIO chip.
 //
-// There is one dual-ported block ram for the pattern storage. From 
-// the PC side it is 16 bits wide and to the application it is 256 
-// bits wide to match the number of nozzles. It has 4096 256 bit wide 
-// locations to hold one full swath on the Titin chip.
-//
-// Pattern RAM: The 16-bit port is connected to the PipeIn.  Data is 
-//              written directly from the pipe to the RAM.  The 256-bit port is
-//              connected to the state machine and sources the 256 nozzle pattern.
-//
-// Adjust RAM:  Adjust RAM moves firing pulse forward or back to compensate for 
-//              encoder tape or stage movement errors. 
-//
-// Nozzle RAM:  Nozzle adjust RAM enables the nozzles during 1 of the 8 firing pulses
-//              For Q heads this is to compensate for the Y-Bow, for the D128s we will
-//              simulate Y-Bow by adding a theta error.   
 //
 // Revisions     3.4 - Fixed pattern ram addressing on app side
-//               5.1 - First Rev 2.0 board supported, 5V and 48V shdn
-//               B.1 - Changed PSO divider to DDS/NCO structure for interferometer
-//               C.1 - Added Pulse Counter and Max Delay to monitor PSO pulses.
+//
 // Things to fix:
-//               1) ramp voltage before enabling relay to avoid unwanted printing
-//               2) delete external SRAM, never used, now obsolete
-//               3) change to 8 output connections from 2
-//               4) add waveform segments and move registers
-//               5) delete heater output, there is none in a Q head
 //               
 // ti_clk is 48 MHz
 //
@@ -44,7 +22,19 @@ module CLIO_Interface_top(
 	inout  wire        hi_aa,
 	
 	output wire [9:1]  debug,        // To TAG Connect header
+   output wire [15:0] logic_anal,   // To posts for logic analyzer
+   output wire [1:0]  logic_clk,    // Clock lines to logic analyzer
+   
+   output wire        DAC_CLK,      // Flowcell lid DAC, also called out of plane
+   output wire        DAC_SYNC_N,
+   output wire        DAC_DATA,
 	
+   output wire        ADC_CS_N,     // Data acquistion ADC with diff inputs and
+   output wire        ADC_CLK,      // variable gain amplifiers. 8 channels.
+   input wire         ADC_SDO,
+   output wire        ADC_SDI,
+   output wire        ADC_RST_N,
+   
 	input  wire        pzt_clim_n,   // Excess current on +120 or +5 to head
 	output wire        shdn_5v,      // Turns off +5 to head
 	output wire        shdn_120v,    // Turns off +120 to head
@@ -54,9 +44,9 @@ module CLIO_Interface_top(
 	output wire        drv_qtr,
     
 	output wire        strobe,
-	output wire        spare_2,
-   input  wire [3:2]  DAC_EN_IN,    // Square wave from NI DAQ, forwarded to CLIO, different pin on different vintages
-   input  wire [2:1]  pd,           // Adjacent pins, also pulldown 
+	output wire [2:1]  spare_,
+   input  wire        DAC_EN_IN,    // Square wave from NI DAQ, forwarded to CLIO, different pin on different vintages
+  // input  wire [2:1]  pd,           // Adjacent pins, also pulldown 
    input  wire [1:0]  version,      // Pins near ground, = 11 for CLIO 2, 01 for CLIO 3
    output wire        waste2,
 	output wire        i2c_sda,
@@ -65,7 +55,6 @@ module CLIO_Interface_top(
 
 	input  wire        clk1,
 	output wire [7:0]  led,
-   input  wire        pso,                   // PSO pulse, x stage movement, drives everything
 	output wire        waste,
 	output wire        valve_on,              // Turns on purge valve, pushes ink through head to prime
    output wire        float_flow,            // Disconnects voltage setting to flow cell lid
@@ -96,12 +85,12 @@ module CLIO_Interface_top(
    output wire        VDD22_EN,              // Turns on  2.2V supply for DACs on CLIO
    output wire        VDD18_EN_N,            // Turns on  1.8V supply for HSTL interface on CLIO, active low, into PMOS
    output wire        VTT_EN,                // Turns on  0.75 supply for termination voltage for HSTL interface
-	output wire        adc_cs,
+ //	output wire        adc_cs,
 	output wire        adc_chsel,
-	output wire        adc_clk,
-	input  wire        adc_dout, 
-   input  wire        K_A_INPUT,             // Trigger signal from K & A Synthesizer
-	output wire [13:0] dac,                   // New 14 bit Twist Bio Inkjet DAC   
+ //	output wire        adc_clk,
+ //	input  wire        adc_dout, 
+ //  input  wire        K_A_INPUT,             // Trigger signal from K & A Synthesizer
+ //	output wire [13:0] dac,                   // New 14 bit Twist Bio Inkjet DAC   
 	output wire        dac_clk						// and its clock.     
 	);
 
@@ -187,76 +176,6 @@ always @ (posedge ti_clk)
           end
    end
 
-//-----------------------------------------------------------------------
-// Q Management TDI and DAC control 3/21 PMH
-//-----------------------------------------------------------------------
-	Q256_mgt Q256(
-		.clk48mhz(ti_clk),
-      .rstn(rstn),
-		.dac(dac),
-		.status_reg(reg_dev_status),
-		.debug_control(debug_control),
-		.debug_status(debug_status),
-		.control_reg(reg_dev_control),
-		.version_reg(reg_fpga_version),
-      .pulse_counter(reg_pulse_counter),
-      .max_delay(reg_max_delay),
-		.dc_value_reg(reg_dc_value),
-		.divider_reg(reg_divider),
-      .length_reg(reg_length),
-		.delay_reg(reg_delay),
-		
-		.pattern_addr(pattern_addr),
-		.pattern_column(pattern_column),
-      .adjust_column(adjust_column),
-      .nozzle_column(nozzle_column),
-      .nozzle_addr(nozzle_addr),
-		
-		.segment1(reg_segment1),
-		.segment2(reg_segment2),
-      .segment3(reg_segment3),
-      .segment4(reg_segment4),
-		.segment5(reg_segment5),
-		.segment6(reg_segment6),
-		.segment7(reg_segment7),
-		.segment8(reg_segment8),
-      
-		.jet_stand1(jet_stand1),
-		.jet_stand2(jet_stand2),
-		.jet_stand3(jet_stand3),
-		.jet_stand4(jet_stand4),
-		.jet_stand5(jet_stand5),
-		.jet_stand6(jet_stand6),
-		.jet_stand7(jet_stand7),
-		
-      .monitor1(dac_act1),
-      .monitor2(dac_act2),
-		.monitor3(dac_act3),
-      .monitor4(dac_act4),
-		.monitor5(dac_act5),
-
-      .PSO(pso),
-    //  .LED(led),
-		.ASIC_DATA(),
-		.ASIC_CLOCK(asic_clk),
-		.ASIC_LATCH(asic_latch),
-		.ASIC_POLARITY(asic_polarity),
-      .ASIC_BLANKING(asic_blanking),
-		.WASTE(waste),		
-	//	.ok_led(ok_led),
-	//	.jet_led(jet_led),
-	//	.power_led(power_led),
-		.valve_on(valve_on),
-      .heat_en(heat_en),
-      .sreg_heat_en(sreg_heat_en),
-      .heat_on(heat_on),
-		.amp_en(amp_en),
-		.shdn_5v(shdn_5v),
-		.shdn_120v(shdn_120v),
-		.pzt_err_n(pzt_err_n),
-		.pzt_clim_n(pzt_clim_n)
-		);
-
 // Need to keep the router happy by creating a clock signal to 
 // be sent outside. Need to check the actual clock edges for 
 // the DAC. 
@@ -273,8 +192,14 @@ ODDR2 ODDR2_debug1(
   .D0(~cpu_clock_invert), .D1(cpu_clock_invert), .C0(ti_clk), .C1(~ti_clk), .Q(debug[1]) );
 
 wire   sreg_heat_en = sreg_dev_control[0];
+wire adc_cs;
+//assign ADC_CLK   = adc_clk; // Connections to 8 channel ADC ADS8688
+//assign ADC_CS_N  = !adc_cs;  // 
+//assign ADC_SDI   = (clk_div[26]^clk_div[10]^clk_div[11]);// ? 1'bz : 1'b0 ;
+//assign ADC_RST_N = rstn;
+//assign adc_dout  = ADC_SDO; // Data coming in ADC
 
-assign heat_on   = below && (heat_en || sreg_heat_en) ;
+assign heat_on   = below && (heat_en || sreg_heat_en) || ADC_SDO ;
 
 always @(posedge ti_clk) 
 begin
@@ -282,18 +207,27 @@ begin
   reg_adc_hs_value <= adc_hs_value;
 end
 
-ADC_SPI adc_interface(
-      .clk48mhz(ti_clk),
-      .rstn(rstn),
-      .adc_cs(adc_cs),
-      .adc_clk(adc_clk),
-      .adc_chsel(adc_chsel),
-      .adc_value(adc_value),
-      .adc_hs_value(adc_hs_value),
-      .adc_setpoint(reg_adc_setpoint[15:0]),
-      .below(below),
-      .adc_dout(adc_dout)
-      );
+OOP_DAC dac_interface(
+    .clk48mhz(ti_clk),
+    .OOP_DAC_VALUE(jet_stand1[15:0]),
+    .rstn(rstn),
+    .DAC_CLK(DAC_CLK),
+    .DAC_DATA(DAC_DATA),
+    .DAC_SYNC_N(DAC_SYNC_N)
+    );
+
+reg [15:0] adc_value1;
+
+octal_adc_interface current_adc(
+    .clk48mhz(ti_clk),
+    .rstn(rstn),
+   // .channel1(adc_value1),
+    .ADC_CLK(ADC_CLK),
+    .ADC_CS_N(ADC_CS_N),
+    .ADC_SDI(ADC_SDI),
+    .ADC_RST_N(ADC_RST_N),
+    .ADC_SDO(ADC_SDO)
+    );
       
 wire cpu_power_shutdown;
 wire dac_only;
@@ -315,6 +249,7 @@ assign cpu_clock_invert       = WireIn10[2];  // Controlled to invert MCLK going
 assign cpu_power_shutdown     = WireIn10[3];  // Turns off all power supplies to the CLIO
 assign clear_transfer_counter = WireIn10[4];  // Clears the SPI transaction counter
 assign dac_only               = WireIn10[5];  // Only send 1 column to frame buffer, the DAC values 
+assign float_flow             = WireIn10[6];  // Disconnect Flow Cell drive and turn off LED
 assign reg_reset     = TrigIn44[0];
 assign pattern_reset = TrigIn45[0];
 assign sreg_reset    = TrigIn46[0];
@@ -472,8 +407,8 @@ assign CLIO_RSTN = rstn;
 
 // assign DAC_EN = cpu_dac_enable && dac_ready;
 // DAC_EN_IN input moves between CLIO2 to CLIO3, select the correct one based on version pins
-assign DAC_EN = (version[1])? DAC_EN_IN[2] : DAC_EN_IN[3] ;       // Signal from NI DAQ forwarded to CLIO chip.
-
+//assign DAC_EN = (version[1])? DAC_EN_IN[2] : DAC_EN_IN[3] ;       // Signal from NI DAQ forwarded to CLIO chip.
+assign DAC_EN = DAC_EN_IN;                                       // Only version 3 boards, FPGA pins used for logic analyzer
 
 // P(x) = x^8+x^6+x^5+x^4+1 
    
@@ -487,8 +422,8 @@ assign VDD18_EN_N = (cpu_power_shutdown)? 1 : 0;
 assign VTT_EN     = (cpu_power_shutdown)? 0 : 1; 
 assign power_led  = (cpu_power_shutdown)? 1 : 0;
 
-assign float_flow = 1'b1;             // Turn off switch to flow cell top, let it float
-assign fc_top_led = 1'b0;              // Turn LED on 
+assign fc_top_led = float_flow;                      // Turns active low LED on when flow cell is driven,
+                                                     // the analog switch is normally closed.
 assign ok_led     = o_SPI_MOSI;       // indicates SPI activity
 
 // Turning off SPI outputs when power is turned off. Could solve the latchup problem.
@@ -498,7 +433,8 @@ assign SPI_MOSI   = (cpu_power_shutdown)? 0 : o_SPI_MOSI;
 assign SPI_CS     = (cpu_power_shutdown)? 0 : rr_TX_Ready; //o_SPI_CS_n;      
 
 assign strobe = o_SPI_MOSI; 
-assign spare_2 = o_SPI_CLK;
+assign spare_[2] = o_SPI_CLK;
+assign spare_[1] = rr_TX_Ready;
 assign i_SPI_MISO = SPI_MISO;  
    
 reg [34:0] clk_div = 0;
@@ -551,10 +487,10 @@ dpram2K_a16_b256 nozzle_ram(.clk(ti_clk),             // Common clock
                           .addrb(nozzle_addr),           // Generated near main pulse 
                           .dob(noz_rddata)); 
 
-// Opal Kelly board LED    D9          D8         D7         D6            D5               D4               D3           D2 (blinky)
-assign   led         = { ~DAC_EN,  ~version[1], ~version[0],~SPI_SCLK ,   ~SPI_MISO      , ~SPI_CS          , ~SPI_MOSI,   clk_div[24]} ;
+// Opal Kelly board LED    D9          D8         D7         D6            D5         D4        D3      D2 (blinky)
+assign   led         = { ~DAC_EN,  ~version[1], ~version[0], ~SPI_SCLK, ~SPI_MISO, ~SPI_CS, ~SPI_MOSI, clk_div[24]} ;
 
-assign waste2 = pd[1] && pd[2] && version[1] && version[0];   // Adjacent pins to DAC_EN_IN, may be connected with solder
+assign waste2 = version[1] && version[0];   // Adjacent pins to DAC_EN_IN, may be connected with solder
 
 // SPI Interface, FIFO fills from Nozzle write and is read back by Nozzle read
 // First Word Fall Through is needed on the write to SPI side.
@@ -628,10 +564,14 @@ end
 assign i_TX_DV = (clk_counter[6:0]==0) && !w_fifo_empty;  // Need a pulse to start the SPI interface
 
 // debug outputs are numbered 9-1, ti_clk is on pin 0. Shows up as D0 on scope. So shift them up by 1, debug[2] is D1 on scope
-assign debug[9:2] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,read_fifo};   
+assign debug[9:2] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,read_fifo};  
+assign logic_anal[7:0] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,clk_counter[0]}; 
+
+assign logic_anal[15:8] = {5'b01010,DAC_SYNC_N,DAC_DATA,DAC_CLK}; 
+assign logic_clk  = clk_div[15:14]; 
 
   // Instantiate Master
-  SPI_Master_Reference    #( .CLKS_PER_HALF_BIT(2))  // Ti_CLK (48 MHz) is divided by 4, thus 1.28us/word  
+  SPI_Master_Reference           // Ti_CLK (48 MHz) is divided by 4, thus 1.28us/word  
   SPI_Master_Inst 
    (
    // Control/Data Signals,
@@ -841,7 +781,7 @@ okWireOut 	 ep23 (.ok1(ok1), .ok2(ok2x[12*17 +: 17 ]), .ep_addr(8'h23), .ep_data
 okWireOut 	 ep24 (.ok1(ok1), .ok2(ok2x[13*17 +: 17 ]), .ep_addr(8'h24), .ep_datain(tx_counter[15:0]));
 okWireOut 	 ep25 (.ok1(ok1), .ok2(ok2x[14*17 +: 17 ]), .ep_addr(8'h25), .ep_datain(tx_counter[31:16]));
 okWireOut 	 ep26 (.ok1(ok1), .ok2(ok2x[15*17 +: 17 ]), .ep_addr(8'h26), .ep_datain(cclk_counter));
-okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(dac_act3[31:16]));
+okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(adc_value1));
 okWireOut 	 ep28 (.ok1(ok1), .ok2(ok2x[17*17 +: 17 ]), .ep_addr(8'h28), .ep_datain(transfer_counter));
 okWireOut 	 ep29 (.ok1(ok1), .ok2(ok2x[18*17 +: 17 ]), .ep_addr(8'h29), .ep_datain(dac_act4[31:16]));
 okWireOut 	 ep2A (.ok1(ok1), .ok2(ok2x[19*17 +: 17 ]), .ep_addr(8'h2A), .ep_datain(spi_write_count));
