@@ -14,9 +14,6 @@ CONFIG INTERNAL_VREF_BANK1=0.75;
 ############################################################################
 ## CLIO Interface Board Rev 2.0                                                        
 ############################################################################
-## NET "heat_on"       LOC="D19"  | IOSTANDARD="LVCMOS33";
-## NET "amp_en"        LOC="K20"  | IOSTANDARD="LVCMOS33" | PULLUP ;
-## NET "valve_on"      LOC="H20"  | IOSTANDARD="LVCMOS33";
 
 ## NET "adc_cs"        LOC="D21"  | IOSTANDARD="LVCMOS33";
 ## NET "adc_clk"       LOC="H22"  | IOSTANDARD="LVCMOS33";
@@ -95,21 +92,6 @@ NET "ok_led"        LOC="C13"   | IOSTANDARD="LVCMOS18";
 
 NET "float_flow"    LOC="C5"    | IOSTANDARD="LVCMOS18";
 
-## NET "pzt_clim_n"    LOC="A5"   | IOSTANDARD="LVCMOS33" | PULLUP;
-## NET "shdn_5v"       LOC="D14"  | IOSTANDARD="LVCMOS33";
-## NET "shdn_120v"     LOC="V20"  | IOSTANDARD="LVCMOS33";
-## NET "pzt_err_n"     LOC="J22"  | IOSTANDARD="LVCMOS33" | PULLUP;
-
-## NET "asic_blanking" LOC="E22"  | IOSTANDARD="LVCMOS33"; 
-## NET "asic_polarity" LOC="A20"  | IOSTANDARD="LVCMOS33";
-## NET "asic_clk"      LOC="M20"  | IOSTANDARD="LVCMOS33" | OUT_TERM = UNTUNED_50;
-## NET "asic_latch"    LOC="N20"  | IOSTANDARD="LVCMOS33";
-
-## NET "drv_half"      LOC="A21"  | IOSTANDARD="LVCMOS33";
-## NET "drv_qtr"       LOC="B21"  | IOSTANDARD="LVCMOS33";
-
-##NET "strobe"        LOC="R20"   | IOSTANDARD="LVCMOS18";
-
 NET "VSSN_EN"          LOC = "D9"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
 NET "VSS22N_EN"        LOC = "C8"   | IOSTANDARD="LVCMOS18" | PULLDOWN;
 NET "VDD_EN"           LOC = "D10"  | IOSTANDARD="LVCMOS18" | PULLDOWN;
@@ -126,7 +108,7 @@ NET "DAC_SYNC_N"       LOC="C12"    | IOSTANDARD="LVCMOS18" ;
 NET "DAC_DATA"         LOC="B6"     | IOSTANDARD="LVCMOS18" ;
 
 
-//NET "DAC_EN_IN<2>"      LOC="K19"   | IOSTANDARD="HSTL_II";  // Enable in pin on CLIO IF 2 boards
+NET "DAC_EN_OUT"      LOC="C17"   | IOSTANDARD="LVCMOS18";  // DAC EN Out for testing
 NET "DAC_EN_IN"     LOC="A17"    | IOSTANDARD="HSTL_II";  // Enable pin for CLIO IF 3+ boards
 //NET "pd<1>"            LOC="R20"   | IOSTANDARD="HSTL_II" ; // Adjacent pins to use as pulldowns
 //NET "pd<2>"            LOC="N20"   | IOSTANDARD="HSTL_II" ;  

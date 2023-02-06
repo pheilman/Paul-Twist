@@ -39,9 +39,6 @@ module CLIO_Interface_top(
 	output wire        shdn_5v,      // Turns off +5 to head
 	output wire        shdn_120v,    // Turns off +120 to head
 	input  wire        pzt_err_n,    // Excess DC current through head
-
-	output wire        drv_half,
-	output wire        drv_qtr,
     
 	output wire        strobe,
 	output wire [2:1]  spare_,
@@ -64,9 +61,7 @@ module CLIO_Interface_top(
    output wire        heat_on,
    output wire        amp_en,                // When high, opens relay to enable amp
 	output wire        asic_clk,
-	output wire        asic_blanking,         // Turns all switches on, also refresh 
-   output wire        asic_polarity,
-	output wire        asic_latch,
+   output wire        DAC_EN_OUT,            // Output to SMA for testing
              
    output wire        CLIO_RSTN,             // Global reset for CLIO   
    output wire        DAC_EN,                // Global external DAC enable line, to allow pulsing.
@@ -112,6 +107,7 @@ reg  [14:0] pattern_u_addr;
 wire        adjust_reset,  adjust_write, adjust_read;
 wire [15:0] adjust_r_data, adjust_w_data;
 reg  [11:0] adjust_u_addr;
+wire [15:0] flow_counter, flow_r_data;           // Number of entries in flowcell current FIFO.
 
 wire        nozzle_reset,  nozzle_write, nozzle_read;
 wire [15:0] nozzle_r_data, nozzle_w_data;
@@ -159,7 +155,7 @@ wire [31:0] dac_act1, dac_act2, dac_act3, dac_act4, dac_act5;
 
 wire [255:0] pattern_column;
 wire [15:0]  adjust_column;
-wire        heat_en,below;
+wire        drive_flow,heat_en,below;
 reg   [2:0] rst_counter = 0;
 reg         rstn;
 
@@ -209,39 +205,56 @@ end
 
 OOP_DAC dac_interface(
     .clk48mhz(ti_clk),
-    .OOP_DAC_VALUE(jet_stand1[15:0]),
-    .rstn(rstn),
+    .rstn(rstn),    
+    .OOP_DAC_VALUE(WireIn12),        // Word written to the DAC 
     .DAC_CLK(DAC_CLK),
     .DAC_DATA(DAC_DATA),
     .DAC_SYNC_N(DAC_SYNC_N)
     );
 
-reg [15:0] adc_value1;
+wire [15:0] adc_value0;
+wire [15:0] adc_value1;
+wire [15:0] adc_value2;
+wire [15:0] adc_value3;
+wire [15:0] adc_value4;
+wire [15:0] adc_value5;
+wire [15:0] adc_value6;
+reg [15:0] adc_value7 = 7;
 
 octal_adc_interface current_adc(
     .clk48mhz(ti_clk),
     .rstn(rstn),
-   // .channel1(adc_value1),
+    .channel0(adc_value0),
+    .channel1(adc_value1),
+    .channel2(adc_value2),
+    .channel3(adc_value3),
+    .channel4(adc_value4),
+    .channel5(adc_value5),    
+    .channel6(adc_value6),
     .ADC_CLK(ADC_CLK),
     .ADC_CS_N(ADC_CS_N),
     .ADC_SDI(ADC_SDI),
     .ADC_RST_N(ADC_RST_N),
     .ADC_SDO(ADC_SDO)
     );
+    
+// Instantiate the module
+DAC_Enable_Pulse_Gen internal_dac_enable(
+    .clk48mhz(ti_clk), 
+    .rstn(rstn), 
+    .Trigger(cpu_dac_enable), 
+    .On_Length(WireIn13), 
+    .Off_Length(WireIn14), 
+    .Number_Of_Pulses(WireIn15), 
+    .Internal_DAC_Enable(DAC_EN_OUT)
+    );
+
       
 wire cpu_power_shutdown;
 wire dac_only;
 
-assign drv_half = 1'b1;
-assign drv_qtr  = 1'b1;
-
 //assign spare[2] = pzt_clim_n;
 //assign spare[1] = pzt_err_n;   
-	 
-assign i2c_sda = 1'bz;			// These are floated to not interfere 
-assign i2c_scl = 1'bz;			// with existing Opal Kelly I2C interface.
-
-assign hi_muxsel = 1'b0;
          
 assign cpu_dac_enable         = WireIn10[0];  // Controlled by cpu to toggle dacs and make pulse waveforms
 assign cpu_prbs_select        = WireIn10[1];  // Controlled to select PRBS for BER testing
@@ -249,7 +262,7 @@ assign cpu_clock_invert       = WireIn10[2];  // Controlled to invert MCLK going
 assign cpu_power_shutdown     = WireIn10[3];  // Turns off all power supplies to the CLIO
 assign clear_transfer_counter = WireIn10[4];  // Clears the SPI transaction counter
 assign dac_only               = WireIn10[5];  // Only send 1 column to frame buffer, the DAC values 
-assign float_flow             = WireIn10[6];  // Disconnect Flow Cell drive and turn off LED
+assign drive_flow             = WireIn10[6];  // Disconnect Flow Cell drive and turn off LED
 assign reg_reset     = TrigIn44[0];
 assign pattern_reset = TrigIn45[0];
 assign sreg_reset    = TrigIn46[0];
@@ -422,9 +435,11 @@ assign VDD18_EN_N = (cpu_power_shutdown)? 1 : 0;
 assign VTT_EN     = (cpu_power_shutdown)? 0 : 1; 
 assign power_led  = (cpu_power_shutdown)? 1 : 0;
 
-assign fc_top_led = float_flow;                      // Turns active low LED on when flow cell is driven,
-                                                     // the analog switch is normally closed.
-assign ok_led     = o_SPI_MOSI;       // indicates SPI activity
+assign fc_top_led = ~drive_flow;                      // Turns active low LED on when flow cell is driven,
+                                                      // the analog switch is normally open. This keeps the cathode from
+                                                      // being driven to -2.5V at power up.
+assign float_flow = ~drive_flow;                      // Invert the signal to control the external analog switch.
+assign ok_led     = o_SPI_MOSI;                       // Indicates SPI activity
 
 // Turning off SPI outputs when power is turned off. Could solve the latchup problem.
 assign SPI_SCLK   = (cpu_power_shutdown)? 0 : o_SPI_CLK;
@@ -565,8 +580,14 @@ assign i_TX_DV = (clk_counter[6:0]==0) && !w_fifo_empty;  // Need a pulse to sta
 
 // debug outputs are numbered 9-1, ti_clk is on pin 0. Shows up as D0 on scope. So shift them up by 1, debug[2] is D1 on scope
 assign debug[9:2] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,read_fifo};  
-assign logic_anal[7:0] = {w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,clk_counter[0]}; 
-
+assign logic_anal[7:0] =     {  1'b0,       ADC_CLK,ADC_SDI, 1'b0,           ADC_SDO,  1'b0 , ADC_CS_N, clk_counter[0]  };                                                                                    
+                           //{w_fifo_empty,SPI_SCLK,SPI_MOSI, word_counter[0],SPI_MISO, i_TX_DV, SPI_CS,clk_counter[0]}; 
+/*
+    .ADC_CLK(ADC_CLK),
+    .ADC_CS_N(ADC_CS_N),
+    .ADC_SDI(ADC_SDI),
+    .ADC_RST_N(ADC_RST_N),
+    .ADC_SDO(ADC_SDO) */ 
 assign logic_anal[15:8] = {5'b01010,DAC_SYNC_N,DAC_DATA,DAC_CLK}; 
 assign logic_clk  = clk_div[15:14]; 
 
@@ -751,19 +772,23 @@ assign jet_stand6 = {WireIn1D , WireIn1C};
 assign jet_stand7 = {WireIn1F , WireIn1E};
 
 // Instantiate the okHost and connect endpoints.
-wire [17*40-1:0]  ok2x;
+assign hi_muxsel  = 1'b0;
+assign i2c_sda    = 1'bz;			// These are floated to not interfere 
+assign i2c_scl    = 1'bz;			// with existing Opal Kelly I2C interface.
+
+wire [17*48-1:0]  ok2x;
 okHost okHI(
 	.hi_in(hi_in), .hi_out(hi_out), .hi_inout(hi_inout), .hi_aa(hi_aa), .ti_clk(ti_clk),
 	.ok1(ok1), .ok2(ok2));
 
-okWireOR # (.N(40)) wireOR (ok2, ok2x);
+okWireOR # (.N(48)) wireOR (ok2, ok2x);
 
 okWireIn     ep10 (.ok1(ok1),                           .ep_addr(8'h10), .ep_dataout(WireIn10)); // CPU control of DAC ENABLE bit 0
 okWireIn     ep11 (.ok1(ok1),                           .ep_addr(8'h11), .ep_dataout(WireIn11)); // Reset Frame 
-okWireIn     ep12 (.ok1(ok1),                           .ep_addr(8'h12), .ep_dataout(WireIn12)); // Length 1
-okWireIn     ep13 (.ok1(ok1),                           .ep_addr(8'h13), .ep_dataout(WireIn13)); // Slope 1
-okWireIn     ep14 (.ok1(ok1),                           .ep_addr(8'h14), .ep_dataout(WireIn14)); // Length 2
-okWireIn     ep15 (.ok1(ok1),                           .ep_addr(8'h15), .ep_dataout(WireIn15)); // Slope 2 
+okWireIn     ep12 (.ok1(ok1),                           .ep_addr(8'h12), .ep_dataout(WireIn12)); // OOP DAC Value
+okWireIn     ep13 (.ok1(ok1),                           .ep_addr(8'h13), .ep_dataout(WireIn13)); // DAC_On_Length
+okWireIn     ep14 (.ok1(ok1),                           .ep_addr(8'h14), .ep_dataout(WireIn14)); // DAC_Off_Length
+okWireIn     ep15 (.ok1(ok1),                           .ep_addr(8'h15), .ep_dataout(WireIn15)); // DAC_Pulses
 okWireIn     ep16 (.ok1(ok1),                           .ep_addr(8'h16), .ep_dataout(WireIn16)); // Length 3
 okWireIn     ep17 (.ok1(ok1),                           .ep_addr(8'h17), .ep_dataout(WireIn17)); // Slope 3
 okWireIn     ep18 (.ok1(ok1),                           .ep_addr(8'h18), .ep_dataout(WireIn18)); // Length 4
@@ -775,18 +800,28 @@ okWireIn     ep1D (.ok1(ok1),                           .ep_addr(8'h1D), .ep_dat
 okWireIn     ep1E (.ok1(ok1),                           .ep_addr(8'h1E), .ep_dataout(WireIn1E)); // Length 7 
 okWireIn     ep1F (.ok1(ok1),                           .ep_addr(8'h1F), .ep_dataout(WireIn1F)); // Slope 7 
 
+okWireOut 	 ep20 (.ok1(ok1), .ok2(ok2x[ 1*17 +: 17 ]), .ep_addr(8'h20), .ep_datain(WireIn10));  
 okWireOut 	 ep21 (.ok1(ok1), .ok2(ok2x[ 9*17 +: 17 ]), .ep_addr(8'h21), .ep_datain(read_byte_count));  
-okWireOut 	 ep22 (.ok1(ok1), .ok2(ok2x[11*17 +: 17 ]), .ep_addr(8'h22), .ep_datain(read_byte_count));
-okWireOut 	 ep23 (.ok1(ok1), .ok2(ok2x[12*17 +: 17 ]), .ep_addr(8'h23), .ep_datain(write_word_count));  // Write count is odd, always has a 1
-okWireOut 	 ep24 (.ok1(ok1), .ok2(ok2x[13*17 +: 17 ]), .ep_addr(8'h24), .ep_datain(tx_counter[15:0]));
-okWireOut 	 ep25 (.ok1(ok1), .ok2(ok2x[14*17 +: 17 ]), .ep_addr(8'h25), .ep_datain(tx_counter[31:16]));
+okWireOut 	 ep22 (.ok1(ok1), .ok2(ok2x[11*17 +: 17 ]), .ep_addr(8'h22), .ep_datain(WireIn12));
+okWireOut 	 ep23 (.ok1(ok1), .ok2(ok2x[12*17 +: 17 ]), .ep_addr(8'h23), .ep_datain(WireIn13));  // Write count is odd, always has a 1
+okWireOut 	 ep24 (.ok1(ok1), .ok2(ok2x[13*17 +: 17 ]), .ep_addr(8'h24), .ep_datain(WireIn14));
+okWireOut 	 ep25 (.ok1(ok1), .ok2(ok2x[14*17 +: 17 ]), .ep_addr(8'h25), .ep_datain(WireIn15));
 okWireOut 	 ep26 (.ok1(ok1), .ok2(ok2x[15*17 +: 17 ]), .ep_addr(8'h26), .ep_datain(cclk_counter));
-okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(adc_value1));
+okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(flow_counter));      // Number of flowcell current measurements in FIFO
 okWireOut 	 ep28 (.ok1(ok1), .ok2(ok2x[17*17 +: 17 ]), .ep_addr(8'h28), .ep_datain(transfer_counter));
 okWireOut 	 ep29 (.ok1(ok1), .ok2(ok2x[18*17 +: 17 ]), .ep_addr(8'h29), .ep_datain(dac_act4[31:16]));
-okWireOut 	 ep2A (.ok1(ok1), .ok2(ok2x[19*17 +: 17 ]), .ep_addr(8'h2A), .ep_datain(spi_write_count));
-okWireOut    ep2B (.ok1(ok1), .ok2(ok2x[21*17 +: 17 ]), .ep_addr(8'h2B), .ep_datain(spi_read_count)); 
-okWireOut    ep2C (.ok1(ok1), .ok2(ok2x[22*17 +: 17 ]), .ep_addr(8'h2C), .ep_datain(DAC_EN)); 
+okWireOut 	 ep2A (.ok1(ok1), .ok2(ok2x[19*17 +: 17 ]), .ep_addr(8'h2A), .ep_datain(spi_write_count));   // Used on software side
+okWireOut    ep2B (.ok1(ok1), .ok2(ok2x[21*17 +: 17 ]), .ep_addr(8'h2B), .ep_datain(spi_read_count));    // Used on software side
+okWireOut    ep2C (.ok1(ok1), .ok2(ok2x[22*17 +: 17 ]), .ep_addr(8'h2C), .ep_datain(DAC_EN));            // 
+okWireOut 	 ep30 (.ok1(ok1), .ok2(ok2x[40*17 +: 17 ]), .ep_addr(8'h30), .ep_datain(adc_value0));        // Current for +1.25 supply     0.5A --> 3.4V 
+okWireOut 	 ep31 (.ok1(ok1), .ok2(ok2x[41*17 +: 17 ]), .ep_addr(8'h31), .ep_datain(adc_value1));        // Current for +1.8 supply      +/- 4.096 FS
+okWireOut 	 ep32 (.ok1(ok1), .ok2(ok2x[42*17 +: 17 ]), .ep_addr(8'h32), .ep_datain(adc_value2));        // Current for +2.2 supply
+okWireOut 	 ep33 (.ok1(ok1), .ok2(ok2x[43*17 +: 17 ]), .ep_addr(8'h33), .ep_datain(adc_value3));        // Inverted current for =2.2 supply
+okWireOut 	 ep34 (.ok1(ok1), .ok2(ok2x[44*17 +: 17 ]), .ep_addr(8'h34), .ep_datain(adc_value4));        // Inverted current for -1.25 supply
+okWireOut 	 ep35 (.ok1(ok1), .ok2(ok2x[45*17 +: 17 ]), .ep_addr(8'h35), .ep_datain(adc_value5));        // Flow cell current, 1V = 1 mA
+okWireOut 	 ep36 (.ok1(ok1), .ok2(ok2x[46*17 +: 17 ]), .ep_addr(8'h36), .ep_datain(adc_value6));        // Flow cell voltage (ignores floating)
+okWireOut 	 ep37 (.ok1(ok1), .ok2(ok2x[47*17 +: 17 ]), .ep_addr(8'h37), .ep_datain(adc_value7));        // Spare
+
 
 okTriggerIn  ep40 (.ok1(ok1),                           .ep_addr(8'h40), .ep_clk(ti_clk), .ep_trigger(TrigIn40));
 okTriggerIn  ep41 (.ok1(ok1),                           .ep_addr(8'h41), .ep_clk(ti_clk), .ep_trigger(TrigIn41));
@@ -813,7 +848,7 @@ okPipeIn     ep88 (.ok1(ok1), .ok2(ok2x[ 24*17 +: 17 ]), .ep_addr(8'h88), .ep_wr
 
 okPipeOut    epA4 (.ok1(ok1), .ok2(ok2x[ 10*17 +: 17 ]), .ep_addr(8'ha4), .ep_read(reg_read),       .ep_datain(reg_r_data));
 okPipeOut    epA5 (.ok1(ok1), .ok2(ok2x[ 30*17 +: 17 ]), .ep_addr(8'ha5), .ep_read(pattern_read),   .ep_datain(pattern_r_data)); /* pattern_u_addr*/
-okPipeOut    epA6 (.ok1(ok1), .ok2(ok2x[  7*17 +: 17 ]), .ep_addr(8'ha6), .ep_read(sreg_read),      .ep_datain(sreg_r_data));
+okPipeOut    epA6 (.ok1(ok1), .ok2(ok2x[  7*17 +: 17 ]), .ep_addr(8'ha6), .ep_read(sreg_read),      .ep_datain(flow_r_data)); 
 okPipeOut    epA7 (.ok1(ok1), .ok2(ok2x[  8*17 +: 17 ]), .ep_addr(8'ha7), .ep_read(adjust_read),    .ep_datain(adjust_r_data)); /* adjust_u_addr*/
 okPipeOut    epA8 (.ok1(ok1), .ok2(ok2x[ 25*17 +: 17 ]), .ep_addr(8'ha8), .ep_read(nozzle_read),    .ep_datain(nozzle_r_data)); /* nozzle_u_addr*/
 
