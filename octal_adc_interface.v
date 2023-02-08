@@ -17,7 +17,7 @@
 //           2       +2.2V          0.5A     3.4V
 //           3       -2.2V         -0.5A     3.4V
 //           4       -1.25V        -0.5A     3.4V
-//           5       Flowcell I     1 mA     1.0V
+//           5       Flowcell I    +/-2.5mA  +/-2.5V
 //           6       Flowcell V    +/-2.5V   +/-2.5V
 //      Going to use manual selection of ADC 
 //      The loop will be as follows:

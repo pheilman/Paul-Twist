@@ -106,8 +106,12 @@ reg  [14:0] pattern_u_addr;
 
 wire        adjust_reset,  adjust_write, adjust_read;
 wire [15:0] adjust_r_data, adjust_w_data;
+
 reg  [11:0] adjust_u_addr;
-wire [15:0] flow_counter, flow_r_data;           // Number of entries in flowcell current FIFO.
+reg         flow_write, flow_read;
+reg  [14:0] flow_w_addr = 0;
+reg  [14:0] flow_r_addr;                         // Writing from the backside of dual port RAM
+wire [15:0] flow_counter, flow_w_data, flow_r_data;           // Number of entries in flowcell current FIFO.
 
 wire        nozzle_reset,  nozzle_write, nozzle_read;
 wire [15:0] nozzle_r_data, nozzle_w_data;
@@ -155,13 +159,14 @@ wire [31:0] dac_act1, dac_act2, dac_act3, dac_act4, dac_act5;
 
 wire [255:0] pattern_column;
 wire [15:0]  adjust_column;
-wire        drive_flow,heat_en,below;
-reg   [2:0] rst_counter = 0;
-reg         rstn;
+wire        drive_flow,internal_select_dac_en,heat_en,below;
+wire        internal_dac_en;
+reg   [8:0] rst_counter = 0;
+reg         rstn = 0;
 
 always @ (posedge ti_clk)
    begin
-      if (rst_counter != 3'b111)
+      if (rst_counter != 8'hff)
          begin
             rstn <= 1'b0;  
             rst_counter <= rst_counter + 1; 
@@ -221,6 +226,8 @@ wire [15:0] adc_value5;
 wire [15:0] adc_value6;
 reg [15:0] adc_value7 = 7;
 
+// Serial connection to octal ADC
+// Minimum gain at the moment but the noise is already a few bits
 octal_adc_interface current_adc(
     .clk48mhz(ti_clk),
     .rstn(rstn),
@@ -246,10 +253,58 @@ DAC_Enable_Pulse_Gen internal_dac_enable(
     .On_Length(WireIn13), 
     .Off_Length(WireIn14), 
     .Number_Of_Pulses(WireIn15), 
-    .Internal_DAC_Enable(DAC_EN_OUT)
+    .clk_1ms(clk_1ms),
+    .Internal_DAC_Enable(internal_dac_en)
     );
 
+assign DAC_EN = internal_select_dac_en ? internal_dac_en : DAC_EN_IN;
+assign DAC_EN_OUT = DAC_EN;                  // Goes to SMA P12 for testing
       
+reg dac_en_r = 0;
+reg dac_en_rr = 0;
+reg dac_en_pulse =0;
+wire clk_1ms;
+
+always @(posedge ti_clk)
+begin
+   dac_en_r <= cpu_dac_enable && internal_select_dac_en && rstn;
+   dac_en_rr <= dac_en_r;
+   dac_en_pulse <= dac_en_r && !dac_en_rr;
+   if (dac_en_pulse == 1)
+   begin
+      flow_w_addr <= 0;
+      flow_r_addr <= 1;
+   end
+   else
+   if (clk_1ms == 1) 
+   begin
+      if (flow_w_addr < 16002)
+      begin
+         flow_write <= 1;
+         flow_w_addr <= flow_w_addr + 1;
+      end
+   end
+   else
+      flow_write <= 0;
+   if (pattern_read == 1'b1)
+      flow_r_addr <= flow_r_addr + 1;
+      
+end
+
+// pattern_read is high for each read of flowcell current
+
+
+dpram_32k_a16_b16 flowcell_current_log (
+  .clka(ti_clk),                 // input clka
+  .wea(flow_write),              // input [0 : 0] wea
+  .addra(flow_w_addr),           // input [14 : 0] addra
+  .dina(adc_value5),             // input [15 : 0] dina
+  .clkb(ti_clk),                 // input clkb
+  .enb(1),                       // input [0 : 0] web
+  .addrb(flow_r_addr),           // input [14 : 0] addrb
+  .doutb(flow_r_data)            // output [15 : 0] doutb
+);
+   
 wire cpu_power_shutdown;
 wire dac_only;
 
@@ -263,12 +318,14 @@ assign cpu_power_shutdown     = WireIn10[3];  // Turns off all power supplies to
 assign clear_transfer_counter = WireIn10[4];  // Clears the SPI transaction counter
 assign dac_only               = WireIn10[5];  // Only send 1 column to frame buffer, the DAC values 
 assign drive_flow             = WireIn10[6];  // Disconnect Flow Cell drive and turn off LED
+assign internal_select_dac_en = WireIn10[7];  // Generate DAC Enable pulses using internal pulse generator (ignoring NI)
 assign reg_reset     = TrigIn44[0];
 assign pattern_reset = TrigIn45[0];
 assign sreg_reset    = TrigIn46[0];
 assign adjust_reset  = TrigIn47[0];
 assign nozzle_reset  = TrigIn48[0];
-   
+
+/*   
 // Instantiate the pattern RAM, 128 KBytes, 16 bit on USB side, 256 bit on Application side
 
 always @(posedge ti_clk) 
@@ -293,6 +350,7 @@ dpram132K_a16_b256 pattern_ram(.clk(ti_clk),             // Common clock
                           .doa(pattern_r_data), 
                           .addrb(pattern_addr),
                           .dob(app_rddata));             
+*/
 
 // Instantiate the adjust RAM, 8 KBytes, 16 bit on USB side, 16 bit on Application side
 // It uses the same read address from the Application side as the pattern memory since
@@ -314,7 +372,7 @@ end
  		
 wire [15:0] adj_rddata;  
 assign adjust_column = adj_rddata;
-// Instantiate the RAM
+/* // Instantiate the RAM
 dpram8K_a16_b16 adjust_ram(.clk(ti_clk),             // Common clock S
                           .wea(adjust_write),         
                           .addra(adjust_u_addr),
@@ -322,7 +380,7 @@ dpram8K_a16_b16 adjust_ram(.clk(ti_clk),             // Common clock S
                           .doa(adjust_r_data), 
                           .addrb(pattern_addr),  // Same column as pattern 
                           .dob(adj_rddata)); 
-                                                    
+*/                                                    
                                                 
 
    reg  [31:0] reg_length   = 2250;    // 2250 bytes in a column, 18,000 bits 0x8ca
@@ -421,7 +479,8 @@ assign CLIO_RSTN = rstn;
 // assign DAC_EN = cpu_dac_enable && dac_ready;
 // DAC_EN_IN input moves between CLIO2 to CLIO3, select the correct one based on version pins
 //assign DAC_EN = (version[1])? DAC_EN_IN[2] : DAC_EN_IN[3] ;       // Signal from NI DAQ forwarded to CLIO chip.
-assign DAC_EN = DAC_EN_IN;                                       // Only version 3 boards, FPGA pins used for logic analyzer
+
+//assign DAC_EN = DAC_EN_IN;                                       // Only version 3 boards, FPGA pins used for logic analyzer
 
 // P(x) = x^8+x^6+x^5+x^4+1 
    
@@ -494,6 +553,7 @@ end
 wire [15:0] noz_rddata, nozzle_column;  
 assign nozzle_column = noz_rddata;
 // Instantiate the RAM
+/*
 dpram2K_a16_b256 nozzle_ram(.clk(ti_clk),             // Common clock
                           .wea(nozzle_write),         
                           .addra(nozzle_u_addr),
@@ -501,9 +561,9 @@ dpram2K_a16_b256 nozzle_ram(.clk(ti_clk),             // Common clock
                           //.doa(nozzle_r_data),           // Stolen for FIFO testing 
                           .addrb(nozzle_addr),           // Generated near main pulse 
                           .dob(noz_rddata)); 
-
+*/
 // Opal Kelly board LED    D9          D8         D7         D6            D5         D4        D3      D2 (blinky)
-assign   led         = { ~DAC_EN,  ~version[1], ~version[0], ~SPI_SCLK, ~SPI_MISO, ~SPI_CS, ~SPI_MOSI, clk_div[24]} ;
+assign   led         = { ~DAC_EN,~version[1], ~version[0], ~SPI_SCLK, ~SPI_MISO, ~SPI_CS, ~SPI_MOSI, clk_div[24]} ;
 
 assign waste2 = version[1] && version[0];   // Adjacent pins to DAC_EN_IN, may be connected with solder
 
@@ -807,7 +867,7 @@ okWireOut 	 ep23 (.ok1(ok1), .ok2(ok2x[12*17 +: 17 ]), .ep_addr(8'h23), .ep_data
 okWireOut 	 ep24 (.ok1(ok1), .ok2(ok2x[13*17 +: 17 ]), .ep_addr(8'h24), .ep_datain(WireIn14));
 okWireOut 	 ep25 (.ok1(ok1), .ok2(ok2x[14*17 +: 17 ]), .ep_addr(8'h25), .ep_datain(WireIn15));
 okWireOut 	 ep26 (.ok1(ok1), .ok2(ok2x[15*17 +: 17 ]), .ep_addr(8'h26), .ep_datain(cclk_counter));
-okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(flow_counter));      // Number of flowcell current measurements in FIFO
+okWireOut 	 ep27 (.ok1(ok1), .ok2(ok2x[16*17 +: 17 ]), .ep_addr(8'h27), .ep_datain(flow_w_addr));      // Number of flowcell current measurements in FIFO
 okWireOut 	 ep28 (.ok1(ok1), .ok2(ok2x[17*17 +: 17 ]), .ep_addr(8'h28), .ep_datain(transfer_counter));
 okWireOut 	 ep29 (.ok1(ok1), .ok2(ok2x[18*17 +: 17 ]), .ep_addr(8'h29), .ep_datain(dac_act4[31:16]));
 okWireOut 	 ep2A (.ok1(ok1), .ok2(ok2x[19*17 +: 17 ]), .ep_addr(8'h2A), .ep_datain(spi_write_count));   // Used on software side
@@ -820,7 +880,7 @@ okWireOut 	 ep33 (.ok1(ok1), .ok2(ok2x[43*17 +: 17 ]), .ep_addr(8'h33), .ep_data
 okWireOut 	 ep34 (.ok1(ok1), .ok2(ok2x[44*17 +: 17 ]), .ep_addr(8'h34), .ep_datain(adc_value4));        // Inverted current for -1.25 supply
 okWireOut 	 ep35 (.ok1(ok1), .ok2(ok2x[45*17 +: 17 ]), .ep_addr(8'h35), .ep_datain(adc_value5));        // Flow cell current, 1V = 1 mA
 okWireOut 	 ep36 (.ok1(ok1), .ok2(ok2x[46*17 +: 17 ]), .ep_addr(8'h36), .ep_datain(adc_value6));        // Flow cell voltage (ignores floating)
-okWireOut 	 ep37 (.ok1(ok1), .ok2(ok2x[47*17 +: 17 ]), .ep_addr(8'h37), .ep_datain(adc_value7));        // Spare
+okWireOut 	 ep37 (.ok1(ok1), .ok2(ok2x[47*17 +: 17 ]), .ep_addr(8'h37), .ep_datain(flow_r_addr));        // Spare
 
 
 okTriggerIn  ep40 (.ok1(ok1),                           .ep_addr(8'h40), .ep_clk(ti_clk), .ep_trigger(TrigIn40));
@@ -841,13 +901,13 @@ okTriggerIn  ep4E (.ok1(ok1),                           .ep_addr(8'h4E), .ep_clk
 //okTriggerOut ep60 (.ok1(ok1), .ok2(ok2x[ 0*17 +: 17 ]), .ep_addr(8'h60), .ep_clk(clk1), .ep_trigger(TrigOut60));
 
 okPipeIn     ep84 (.ok1(ok1), .ok2(ok2x[  5*17 +: 17 ]), .ep_addr(8'h84), .ep_write(reg_write),     .ep_dataout(reg_w_data));
-okPipeIn     ep85 (.ok1(ok1), .ok2(ok2x[ 20*17 +: 17 ]), .ep_addr(8'h85), .ep_write(pattern_write), .ep_dataout(pattern_w_data));
+okPipeIn     ep85 (.ok1(ok1), .ok2(ok2x[ 20*17 +: 17 ]), .ep_addr(8'h85), .ep_write(pattern_write), .ep_dataout(flow_w_data));
 okPipeIn     ep86 (.ok1(ok1), .ok2(ok2x[  6*17 +: 17 ]), .ep_addr(8'h86), .ep_write(sreg_write),    .ep_dataout(sreg_w_data));
 okPipeIn     ep87 (.ok1(ok1), .ok2(ok2x[ 23*17 +: 17 ]), .ep_addr(8'h87), .ep_write(adjust_write),  .ep_dataout(adjust_w_data));
 okPipeIn     ep88 (.ok1(ok1), .ok2(ok2x[ 24*17 +: 17 ]), .ep_addr(8'h88), .ep_write(nozzle_write),  .ep_dataout(nozzle_w_data));
 
 okPipeOut    epA4 (.ok1(ok1), .ok2(ok2x[ 10*17 +: 17 ]), .ep_addr(8'ha4), .ep_read(reg_read),       .ep_datain(reg_r_data));
-okPipeOut    epA5 (.ok1(ok1), .ok2(ok2x[ 30*17 +: 17 ]), .ep_addr(8'ha5), .ep_read(pattern_read),   .ep_datain(pattern_r_data)); /* pattern_u_addr*/
+okPipeOut    epA5 (.ok1(ok1), .ok2(ok2x[ 30*17 +: 17 ]), .ep_addr(8'ha5), .ep_read(pattern_read),   .ep_datain(flow_r_data)); /* pattern_u_addr*/
 okPipeOut    epA6 (.ok1(ok1), .ok2(ok2x[  7*17 +: 17 ]), .ep_addr(8'ha6), .ep_read(sreg_read),      .ep_datain(flow_r_data)); 
 okPipeOut    epA7 (.ok1(ok1), .ok2(ok2x[  8*17 +: 17 ]), .ep_addr(8'ha7), .ep_read(adjust_read),    .ep_datain(adjust_r_data)); /* adjust_u_addr*/
 okPipeOut    epA8 (.ok1(ok1), .ok2(ok2x[ 25*17 +: 17 ]), .ep_addr(8'ha8), .ep_read(nozzle_read),    .ep_datain(nozzle_r_data)); /* nozzle_u_addr*/
