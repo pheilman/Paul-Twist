@@ -211,7 +211,7 @@ end
 OOP_DAC dac_interface(
     .clk48mhz(ti_clk),
     .rstn(rstn),    
-    .OOP_DAC_VALUE(WireIn12),        // Word written to the DAC 
+    .OOP_DAC_VALUE(OOP_DAC),        // Word written to the DAC 
     .DAC_CLK(DAC_CLK),
     .DAC_DATA(DAC_DATA),
     .DAC_SYNC_N(DAC_SYNC_N)
@@ -256,6 +256,11 @@ DAC_Enable_Pulse_Gen internal_dac_enable(
     .clk_1ms(clk_1ms),
     .Internal_DAC_Enable(internal_dac_en)
     );
+
+wire [15:0] OOP_DAC, OOP_DAC_Enabled;
+// DAC value sent out is always from the OK values when internal dac en is low.
+assign OOP_DAC_Enabled = internal_dac_en ? WireIn12 : 16'h7fff ; // When DAC Enable is low, set OOP Dac to 0 volts (midscale)
+assign OOP_DAC = internal_select_dac_en  ? OOP_DAC_Enabled : WireIn12;
 
 assign DAC_EN = internal_select_dac_en ? internal_dac_en : DAC_EN_IN;
 assign DAC_EN_OUT = DAC_EN;                  // Goes to SMA P12 for testing
@@ -497,7 +502,8 @@ assign power_led  = (cpu_power_shutdown)? 1 : 0;
 assign fc_top_led = ~drive_flow;                      // Turns active low LED on when flow cell is driven,
                                                       // the analog switch is normally open. This keeps the cathode from
                                                       // being driven to -2.5V at power up.
-assign float_flow = ~drive_flow;                      // Invert the signal to control the external analog switch.
+assign float_flow = (~drive_flow)? 1'bz : 1'b0;       // Invert the signal to control the external analog switch. 
+                                                      // Need to make it open drain to pullup to 3V for switch operation.
 assign ok_led     = o_SPI_MOSI;                       // Indicates SPI activity
 
 // Turning off SPI outputs when power is turned off. Could solve the latchup problem.
