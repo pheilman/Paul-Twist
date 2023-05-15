@@ -184,13 +184,15 @@ ODDR2 ODDR2_inst(
  .D0(1), .D1(0), .C0(ti_clk), .C1(~ti_clk), .Q(dac_clk) );
 // Flipped clock phase back, didn't help to get centered in data
 // Problem was they did not document the need for >8 MCLK long CCLK signal  
+// MCLK goes to zero when CPU power shutdown
+
 ODDR2 ODDR2_CLIO(
-  .D0(~cpu_clock_invert), .D1(cpu_clock_invert), .C0(ti_clk), .C1(~ti_clk), .Q(MCLK) );
+  .D0((~cpu_clock_invert && !cpu_power_shutdown)), .D1(cpu_clock_invert && !cpu_power_shutdown), .C0(ti_clk), .C1(~ti_clk), .Q(MCLK) );
 // Could provide signal based flipping of clocks by putting the signal into
 // the D0 and D1 ports. 
  
 ODDR2 ODDR2_debug1(
-  .D0(~cpu_clock_invert), .D1(cpu_clock_invert), .C0(ti_clk), .C1(~ti_clk), .Q(debug[1]) );
+  .D0((~cpu_clock_invert && !cpu_power_shutdown)), .D1(cpu_clock_invert && !cpu_power_shutdown), .C0(ti_clk), .C1(~ti_clk), .Q(debug[1]) );
 
 wire   sreg_heat_en = sreg_dev_control[0];
 wire adc_cs;
@@ -479,7 +481,7 @@ assign asic_data = (cpu_prbs_select)? col     : dout; //WireIn12[7:0] ; // col[7
 assign FRAME     = (cpu_prbs_select)? frame_r : frame_int; 
 
 
-assign CLIO_RSTN = rstn;
+assign CLIO_RSTN = (cpu_power_shutdown)? 0 : rstn;      // Turn off line when power is shutdown
 
 // assign DAC_EN = cpu_dac_enable && dac_ready;
 // DAC_EN_IN input moves between CLIO2 to CLIO3, select the correct one based on version pins
@@ -493,7 +495,7 @@ assign CLIO_RSTN = rstn;
 assign VSSN_EN    = (cpu_power_shutdown)? 0 : 1;
 assign VSS22N_EN  = (cpu_power_shutdown)? 0 : 1;
 assign VDD_EN     = (cpu_power_shutdown)? 0 : 1;
-assign VDD15_EN   = (cpu_power_shutdown)? 0 : 1;
+assign VDD15_EN   = 1; // (cpu_power_shutdown)? 0 : 1;  // Leave 1.5V active to run the ADC
 assign VDD22_EN   = (cpu_power_shutdown)? 0 : 1;
 assign VDD18_EN_N = (cpu_power_shutdown)? 1 : 0;
 assign VTT_EN     = (cpu_power_shutdown)? 0 : 1; 
