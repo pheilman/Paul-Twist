@@ -108,10 +108,13 @@ wire        adjust_reset,  adjust_write, adjust_read;
 wire [15:0] adjust_r_data, adjust_w_data;
 
 reg  [11:0] adjust_u_addr;
-reg         flow_write, flow_read;
+reg         flow_write, flow_read, flow_v_write;
 reg  [14:0] flow_w_addr = 0;
-reg  [14:0] flow_r_addr;                         // Writing from the backside of dual port RAM
+reg  [14:0] flow_vw_addr = 0;                                 // Address to capture values in smaller memory
+reg  [14:0] flow_r_addr, flow_v_addr;                         // Reading from the backside of dual port RAM
 wire [15:0] flow_counter, flow_w_data, flow_r_data;           // Number of entries in flowcell current FIFO.
+wire [15:0] flow_v_data;                                      // Flow cell voltage data from dual port memory. 
+wire        flow_v_read;                                      // Pulses as voltage values are read from computer side
 
 wire        nozzle_reset,  nozzle_write, nozzle_read;
 wire [15:0] nozzle_r_data, nozzle_w_data;
@@ -295,8 +298,31 @@ begin
       flow_write <= 0;
    if (pattern_read == 1'b1)
       flow_r_addr <= flow_r_addr + 1;
-      
+
 end
+
+/* always @(posedge ti_clk)
+begin
+   if (dac_en_pulse == 1)
+   begin
+      flow_vw_addr <= 0;
+      flow_v_addr <= 1;
+   end
+   else
+   if (clk_1ms == 1)
+   begin
+      if (flow_vw_addr < 8002)
+      begin
+         flow_v_write <= 1;
+         flow_vw_addr <= flow_vw_addr + 1;
+      end
+   end
+   else
+      flow_v_write <= 0;
+   if (flow_v_read == 1'b1)
+      flow_v_addr <= flow_v_addr + 1;
+end */
+   
 
 // pattern_read is high for each read of flowcell current
 
@@ -304,13 +330,28 @@ end
 dpram_32k_a16_b16 flowcell_current_log (
   .clka(ti_clk),                 // input clka
   .wea(flow_write),              // input [0 : 0] wea
-  .addra(flow_w_addr),           // input [14 : 0] addra
+  .addra(flow_w_addr),           // input [13 : 0] addra
   .dina(adc_value5),             // input [15 : 0] dina
   .clkb(ti_clk),                 // input clkb
   .enb(1),                       // input [0 : 0] web
-  .addrb(flow_r_addr),           // input [14 : 0] addrb
+  .addrb(flow_r_addr),           // input [13 : 0] addrb
   .doutb(flow_r_data)            // output [15 : 0] doutb
 );
+  
+// pattern_read is high for each read of flowcell voltage
+dpram_8k_a16_b16 flowcell_voltage_log (
+  .clka(ti_clk),                 // input clka
+  .wea(flow_write),              // input [0 : 0] wea
+  .addra(flow_w_addr[13:1]),     // input [12 : 1] addra, only advances every other millisecond
+  .dina(adc_value6),             // input [15 : 0] dina, the ADC value for the flowcell voltage
+  .clkb(ti_clk),                 // input clkb
+  .enb(1),                       // input [0 : 0] web
+  .addrb(flow_v_addr),           // input [12 : 0] addrb
+  .doutb(flow_v_data)            // output [15 : 0] doutb
+);
+// 16k locations was too big to fit  
+
+   
    
 wire cpu_power_shutdown;
 wire dac_only;
@@ -915,8 +956,8 @@ okPipeIn     ep87 (.ok1(ok1), .ok2(ok2x[ 23*17 +: 17 ]), .ep_addr(8'h87), .ep_wr
 okPipeIn     ep88 (.ok1(ok1), .ok2(ok2x[ 24*17 +: 17 ]), .ep_addr(8'h88), .ep_write(nozzle_write),  .ep_dataout(nozzle_w_data));
 
 okPipeOut    epA4 (.ok1(ok1), .ok2(ok2x[ 10*17 +: 17 ]), .ep_addr(8'ha4), .ep_read(reg_read),       .ep_datain(reg_r_data));
-okPipeOut    epA5 (.ok1(ok1), .ok2(ok2x[ 30*17 +: 17 ]), .ep_addr(8'ha5), .ep_read(pattern_read),   .ep_datain(flow_r_data)); /* pattern_u_addr*/
-okPipeOut    epA6 (.ok1(ok1), .ok2(ok2x[  7*17 +: 17 ]), .ep_addr(8'ha6), .ep_read(sreg_read),      .ep_datain(flow_r_data)); 
+okPipeOut    epA5 (.ok1(ok1), .ok2(ok2x[ 30*17 +: 17 ]), .ep_addr(8'ha5), .ep_read(pattern_read),   .ep_datain(flow_r_data)); /* Flowcell current 1 ms samples */
+okPipeOut    epA6 (.ok1(ok1), .ok2(ok2x[  7*17 +: 17 ]), .ep_addr(8'ha6), .ep_read(flow_v_read),    .ep_datain(flow_v_data)); /* Flowcell voltage 1 ms samples */
 okPipeOut    epA7 (.ok1(ok1), .ok2(ok2x[  8*17 +: 17 ]), .ep_addr(8'ha7), .ep_read(adjust_read),    .ep_datain(adjust_r_data)); /* adjust_u_addr*/
 okPipeOut    epA8 (.ok1(ok1), .ok2(ok2x[ 25*17 +: 17 ]), .ep_addr(8'ha8), .ep_read(nozzle_read),    .ep_datain(nozzle_r_data)); /* nozzle_u_addr*/
 
