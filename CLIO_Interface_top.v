@@ -262,13 +262,26 @@ DAC_Enable_Pulse_Gen internal_dac_enable(
     .Internal_DAC_Enable(internal_dac_en)
     );
 
+   
 wire [15:0] OOP_DAC, OOP_DAC_Enabled;
 // DAC value sent out is always from the OK values when internal dac en is low.
 assign OOP_DAC_Enabled = internal_dac_en ? WireIn12 : 16'h7fff ; // When DAC Enable is low, set OOP Dac to 0 volts (midscale)
 assign OOP_DAC = internal_select_dac_en  ? OOP_DAC_Enabled : WireIn12;
 
-assign DAC_EN = internal_select_dac_en ? internal_dac_en : DAC_EN_IN;
+assign DAC_EN = internal_select_dac_en ? internal_dac_en : dac_en_filt;
 assign DAC_EN_OUT = DAC_EN;                  // Goes to SMA P12 for testing
+
+reg dac_ext_r, dac_ext_rr, dac_en_filt;
+always @(posedge ti_clk)
+begin
+   if (clk_1ms == 1)
+   begin
+      dac_ext_r <= DAC_EN_IN;
+      dac_ext_rr <= dac_ext_r;
+      dac_en_filt <= dac_ext_r & dac_ext_rr;
+   end
+end
+
       
 reg dac_en_r = 0;
 reg dac_en_rr = 0;
@@ -283,7 +296,8 @@ begin
    if (dac_en_pulse == 1)
    begin
       flow_w_addr <= 0;
-      flow_r_addr <= 1;
+      flow_r_addr <= 1;   // Reset read pointer for flowcell currents
+      flow_v_addr <= 1;   // Reset read pointer for flowcell voltages 
    end
    else
    if (clk_1ms == 1) 
@@ -298,6 +312,8 @@ begin
       flow_write <= 0;
    if (pattern_read == 1'b1)
       flow_r_addr <= flow_r_addr + 1;
+   if (flow_v_read == 1'b1)
+      flow_v_addr <= flow_v_addr + 1;
 
 end
 
@@ -333,7 +349,7 @@ dpram_32k_a16_b16 flowcell_current_log (
   .addra(flow_w_addr),           // input [13 : 0] addra
   .dina(adc_value5),             // input [15 : 0] dina
   .clkb(ti_clk),                 // input clkb
-  .enb(1),                       // input [0 : 0] web
+  .enb(1),                       // input [0 : 0] B side is always enabled
   .addrb(flow_r_addr),           // input [13 : 0] addrb
   .doutb(flow_r_data)            // output [15 : 0] doutb
 );
@@ -345,7 +361,7 @@ dpram_8k_a16_b16 flowcell_voltage_log (
   .addra(flow_w_addr[13:1]),     // input [12 : 1] addra, only advances every other millisecond
   .dina(adc_value6),             // input [15 : 0] dina, the ADC value for the flowcell voltage
   .clkb(ti_clk),                 // input clkb
-  .enb(1),                       // input [0 : 0] web
+  .enb(1),                       // input [0 : 0] B side is always enabled 
   .addrb(flow_v_addr),           // input [12 : 0] addrb
   .doutb(flow_v_data)            // output [15 : 0] doutb
 );
