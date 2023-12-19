@@ -286,35 +286,44 @@ end
 reg dac_en_r = 0;
 reg dac_en_rr = 0;
 reg dac_en_pulse =0;
+reg flow_count_en = 0;
 wire clk_1ms;
 
 always @(posedge ti_clk)
 begin
-   dac_en_r <= cpu_dac_enable && internal_select_dac_en && rstn;
-   dac_en_rr <= dac_en_r;
-   dac_en_pulse <= dac_en_r && !dac_en_rr;
-   if (dac_en_pulse == 1)
+  // if (rstn)
    begin
-      flow_w_addr <= 0;
-      flow_r_addr <= 1;   // Reset read pointer for flowcell currents
-      flow_v_addr <= 1;   // Reset read pointer for flowcell voltages 
-   end
-   else
-   if (clk_1ms == 1) 
-   begin
-      if (flow_w_addr < 16002)
+      dac_en_r <= cpu_dac_enable && internal_select_dac_en;
+      dac_en_rr <= dac_en_r;
+      dac_en_pulse <= dac_en_r && !dac_en_rr;
+      if (dac_en_pulse == 1)
       begin
-         flow_write <= 1;
-         flow_w_addr <= flow_w_addr + 1;
+         flow_w_addr <= 0;
+         flow_count_en <= 1;
+         flow_r_addr <= 1;   // Reset read pointer for flowcell currents
+         flow_v_addr <= 1;   // Reset read pointer for flowcell voltages 
       end
+      else
+      if (clk_1ms == 1) 
+      begin
+         if (flow_count_en) //(flow_w_addr < 16002)) // && flow_count_en)
+         begin
+            flow_write <= 1;
+            flow_w_addr <= flow_w_addr + 1;
+            if (flow_w_addr > 16000)
+               flow_count_en <= 0;
+         end
+      end
+      else
+      begin      
+         flow_write <= 0;
+         // flow_count_en <= 0;
+      end
+      if (pattern_read == 1'b1)
+         flow_r_addr <= flow_r_addr + 1;
+      if (flow_v_read == 1'b1)
+         flow_v_addr <= flow_v_addr + 1;
    end
-   else
-      flow_write <= 0;
-   if (pattern_read == 1'b1)
-      flow_r_addr <= flow_r_addr + 1;
-   if (flow_v_read == 1'b1)
-      flow_v_addr <= flow_v_addr + 1;
-
 end
 
 /* always @(posedge ti_clk)
